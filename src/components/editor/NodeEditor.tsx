@@ -1,33 +1,20 @@
-import React, { useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useMemo, useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ReactFlow, Node, Edge, Background, Controls, MiniMap,
+  ReactFlow, Node, Edge, Background, Controls, ControlButton, MiniMap,
   useNodesState, useEdgesState, addEdge, Connection
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useSessionStore } from '@/stores/session-store';
 import { useAppStore } from '@/stores/app-store';
 import { MODULE_DEFS } from '@/constants/modules';
+import { ModuleNode } from '@/components/editor/ModuleNode';
 import type { Particle3DConfig } from '@/types/effect';
 
-function getNodeStyle(def: typeof MODULE_DEFS[number], enabled: boolean, selected: boolean) {
-  return {
-    background: enabled ? 'var(--bg-tertiary)' : 'var(--bg-secondary)',
-    border: `2px solid ${selected ? '#fff' : enabled ? def.color : 'var(--border-color)'}`,
-    color: enabled ? 'var(--text-primary)' : 'var(--text-secondary)',
-    borderRadius: 'var(--radius-md)',
-    padding: '8px 16px',
-    fontSize: 13,
-    opacity: enabled ? 1 : 0.5,
-    width: 160,
-    cursor: 'pointer',
-    boxShadow: selected ? `0 0 0 2px ${def.color}` : undefined
-  };
-}
+const nodeTypes = { moduleNode: ModuleNode };
 
 function getInitialNodes(
   config: Particle3DConfig | null,
-  layout?: Record<string, { x: number; y: number }>,
-  selectedKey?: string | null
+  layout?: Record<string, { x: number; y: number }>
 ): Node[] {
   if (!config) return [];
   return MODULE_DEFS.map((def, i) => {
@@ -37,10 +24,9 @@ function getInitialNodes(
     const saved = layout?.[def.key];
     return {
       id: def.key,
-      type: 'default',
-      position: saved || { x: col * 200 + 20, y: row * 70 + 20 },
-      data: { label: def.label, moduleKey: def.key, enabled },
-      style: getNodeStyle(def, enabled, selectedKey === def.key)
+      type: 'moduleNode',
+      position: saved || { x: col * 220 + 30, y: row * 88 + 30 },
+      data: { label: def.label, moduleKey: def.key, enabled }
     };
   });
 }
@@ -50,8 +36,9 @@ function getInitialEdges(): Edge[] {
     id: `e-main-${def.key}`,
     source: 'mainModule',
     target: def.key,
+    type: 'smoothstep',
     animated: true,
-    style: { stroke: 'var(--border-color)', strokeWidth: 1 }
+    style: { stroke: 'rgba(88,166,255,0.35)', strokeWidth: 1.5 }
   }));
 }
 
@@ -60,42 +47,44 @@ export const NodeEditor: React.FC = () => {
   const { selectedModuleKey, setSelectedModuleKey } = useAppStore();
   const config = currentEffect?.config as Particle3DConfig | undefined;
   const effectIdRef = useRef<string | null>(null);
+  const [interactive, setInteractive] = useState(true);
 
   const initialNodes = useMemo(
-    () => getInitialNodes(config || null, currentEffect?.metadata?.nodeLayout, selectedModuleKey),
-    [config, currentEffect?.metadata?.nodeLayout, selectedModuleKey]
+    () => getInitialNodes(config || null, currentEffect?.metadata?.nodeLayout),
+    [config, currentEffect?.metadata?.nodeLayout]
   );
   const initialEdges = useMemo(() => getInitialEdges(), []);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
-  // Reset layout only when switching to a different effect
   useEffect(() => {
     if (!currentEffect) return;
     if (effectIdRef.current !== currentEffect.id) {
       effectIdRef.current = currentEffect.id;
-      setNodes(getInitialNodes(config || null, currentEffect.metadata?.nodeLayout, selectedModuleKey));
+      setNodes(getInitialNodes(config || null, currentEffect.metadata?.nodeLayout));
     }
-  }, [currentEffect, config, selectedModuleKey, setNodes]);
+  }, [currentEffect, config, setNodes]);
 
-  // Update node styles when config or selection changes, preserve positions
   useEffect(() => {
     if (!config) return;
     setNodes(prev => prev.map(node => {
-      const def = MODULE_DEFS.find(d => d.key === node.id);
-      if (!def) return node;
-      const enabled = (config[def.key as keyof Particle3DConfig] as { enabled?: boolean })?.enabled !== false;
+      const enabled = (config[node.id as keyof Particle3DConfig] as { enabled?: boolean })?.enabled !== false;
       return {
         ...node,
-        data: { ...node.data, enabled },
-        style: getNodeStyle(def, enabled, selectedModuleKey === def.key)
+        selected: selectedModuleKey === node.id,
+        data: { ...node.data, enabled }
       };
     }));
   }, [config, selectedModuleKey, setNodes]);
 
   const onConnect = useCallback((connection: Connection) => {
-    setEdges((eds) => addEdge({ ...connection, animated: true, style: { stroke: 'var(--accent)', strokeWidth: 2 } }, eds));
+    setEdges((eds) => addEdge({
+      ...connection,
+      type: 'smoothstep',
+      animated: true,
+      style: { stroke: 'var(--accent)', strokeWidth: 2 }
+    }, eds));
   }, [setEdges]);
 
   const onNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
@@ -128,17 +117,18 @@ export const NodeEditor: React.FC = () => {
 
   if (!currentEffect) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-secondary)', fontSize: 14 }}>
+      <div className="node-editor-empty">
         在左侧对话面板输入特效描述以开始
       </div>
     );
   }
 
   return (
-    <div style={{ width: '100%', height: '100%' }}>
+    <div className="node-editor-root">
       <ReactFlow
         nodes={nodes}
         edges={edges}
+        nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
@@ -146,15 +136,33 @@ export const NodeEditor: React.FC = () => {
         onNodeDoubleClick={onNodeDoubleClick}
         onNodeDragStop={onNodeDragStop}
         fitView
-        nodesDraggable
-        nodesConnectable
+        fitViewOptions={{ padding: 0.2 }}
+        nodesDraggable={interactive}
+        nodesConnectable={interactive}
+        elementsSelectable={interactive}
+        proOptions={{ hideAttribution: true }}
       >
-        <Background color="var(--border-color)" gap={20} />
-        <Controls showInteractive={false} />
+        <Background color="rgba(48,54,61,0.6)" gap={24} size={1} />
+        <Controls showInteractive={false} className="node-controls">
+          <ControlButton
+            onClick={() => setInteractive(v => !v)}
+            title={interactive ? '锁定节点（禁止拖动）' : '解锁节点'}
+            aria-label={interactive ? '锁定' : '解锁'}
+          >
+            {interactive ? (
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M17 8h-1V6a4 4 0 0 0-8 0v2H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2zm-3 0H10V6a2 2 0 1 1 4 0v2z"/></svg>
+            ) : (
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5zm3 8H9V7a3 3 0 0 1 6 0v3z"/></svg>
+            )}
+          </ControlButton>
+        </Controls>
         <MiniMap
-          style={{ background: 'var(--bg-secondary)' }}
-          maskColor="rgba(0,0,0,0.7)"
-          nodeColor={(n) => n.style?.border?.toString().includes('var(--border-color)') ? '#666' : '#58a6ff'}
+          className="node-minimap"
+          maskColor="rgba(13,17,23,0.85)"
+          nodeColor={(n) => {
+            const def = MODULE_DEFS.find(d => d.key === n.id);
+            return def?.color ?? '#58a6ff';
+          }}
         />
       </ReactFlow>
     </div>

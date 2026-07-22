@@ -77,6 +77,15 @@ function createDefaultSession(name = '新建特效'): Session {
   };
 }
 
+export function getNextEffectName(sessions: Session[]): string {
+  const base = '新建特效';
+  const names = new Set(sessions.map(s => s.name));
+  if (!names.has(base)) return base;
+  let i = 2;
+  while (names.has(`${base} ${i}`)) i++;
+  return `${base} ${i}`;
+}
+
 export const useSessionStore = create<SessionState>((set, get) => ({
   sessions: loadSessions(),
   activeSessionId: null,

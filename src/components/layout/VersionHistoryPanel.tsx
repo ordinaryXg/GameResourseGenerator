@@ -8,9 +8,6 @@ export const VersionHistoryPanel: React.FC = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-color)', fontWeight: 600, fontSize: 14 }}>
-        📜 版本历史
-      </div>
       <div style={{ flex: 1, overflow: 'auto', padding: 8 }}>
         {versions.length === 0 ? (
           <div style={{ padding: 16, color: 'var(--text-secondary)', fontSize: 13, textAlign: 'center' }}>

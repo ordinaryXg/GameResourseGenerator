@@ -1,6 +1,13 @@
 import * as THREE from 'three';
 import type { Particle3DConfig, RangeValue } from '@/types/effect';
 
+export interface AxisScreenVector {
+  id: 'x' | 'y' | 'z';
+  dx: number;
+  dy: number;
+  depth: number;
+}
+
 interface BaseParticle {
   position: THREE.Vector3;
   velocity: THREE.Vector3;
@@ -25,16 +32,13 @@ export abstract class BaseParticlePreview {
   protected animationId: number | null = null;
   protected container: HTMLElement | null = null;
   protected config: Particle3DConfig | null = null;
-  protected axesHelper: THREE.AxesHelper;
 
   constructor() {
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x0d1117);
-    const gridHelper = new THREE.GridHelper(10, 10, 0x30363d, 0x21262d);
+    this.scene.background = new THREE.Color(0x252530);
+    const gridHelper = new THREE.GridHelper(10, 10, 0x404050, 0x303040);
     this.scene.add(gridHelper);
-    this.axesHelper = new THREE.AxesHelper(2);
-    this.scene.add(this.axesHelper);
-    this.scene.add(new THREE.AmbientLight(0x404040));
+    this.scene.add(new THREE.AmbientLight(0x505060));
   }
 
   setBackground(color: string) {
@@ -47,10 +51,6 @@ export abstract class BaseParticlePreview {
     }
   }
 
-  setAxesVisible(visible: boolean) {
-    this.axesHelper.visible = visible;
-  }
-
   protected initRenderer() {
     if (this.renderer) return;
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -60,12 +60,27 @@ export abstract class BaseParticlePreview {
   mount(container: HTMLElement) {
     this.container = container;
     this.initRenderer();
-    container.appendChild(this.renderer!.domElement);
+    const canvas = this.renderer!.domElement;
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    canvas.style.display = 'block';
+    container.appendChild(canvas);
     this.resize();
     this.start();
+    this.observeResize(container);
+  }
+
+  private resizeObserver: ResizeObserver | null = null;
+
+  private observeResize(container: HTMLElement) {
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = new ResizeObserver(() => this.resize());
+    this.resizeObserver.observe(container);
   }
 
   unmount() {
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
     this.stop();
     if (this.renderer?.domElement.parentElement === this.container) {
       this.container?.removeChild(this.renderer.domElement);
@@ -95,6 +110,23 @@ export abstract class BaseParticlePreview {
   onMouseMove(_x: number, _y: number) {}
   onMouseUp() {}
   onWheel(_deltaY: number) {}
+
+  /** World axis directions projected to screen space for orientation gizmo. */
+  getAxisScreenVectors(): AxisScreenVector[] {
+    const cam = this.getCamera();
+    const inv = cam.quaternion.clone().invert();
+    const scale = 20;
+    const ids = ['x', 'y', 'z'] as const;
+    const vectors = [
+      new THREE.Vector3(1, 0, 0),
+      new THREE.Vector3(0, 1, 0),
+      new THREE.Vector3(0, 0, 1)
+    ];
+    return vectors.map((v, i) => {
+      const w = v.clone().applyQuaternion(inv);
+      return { id: ids[i], dx: w.x * scale, dy: -w.y * scale, depth: w.z };
+    });
+  }
 
   private resetSimulation() {
     for (const p of this.particles) { this.scene.remove(p.sprite); p.material.dispose(); }

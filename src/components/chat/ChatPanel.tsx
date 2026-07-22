@@ -163,16 +163,6 @@ export const ChatPanel: React.FC = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* Header */}
-      <div className="panel-header">
-        <span>AI 对话</span>
-        {appMode === 'demo' ? (
-          <span className="badge badge-demo">Demo 模式</span>
-        ) : (
-          <span className="badge badge-llm">{aiSettings.model}</span>
-        )}
-      </div>
-
       {/* Messages */}
       <div style={{ flex: 1, overflow: 'auto', padding: '12px 16px' }}>
         {messages.map((msg) => (

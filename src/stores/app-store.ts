@@ -22,7 +22,17 @@ function loadPanelSizes(): PanelSizes {
 }
 
 function loadPreviewBackground(): string {
-  return localStorage.getItem(PREVIEW_BG_KEY) || '#0d1117';
+  const stored = localStorage.getItem(PREVIEW_BG_KEY);
+  const legacyMap: Record<string, string> = {
+    '#0d1117': '#252530',
+    '#e6edf3': '#3a3a42',
+    '#1a1a2e': '#2d3142'
+  };
+  if (stored && legacyMap[stored]) {
+    localStorage.setItem(PREVIEW_BG_KEY, legacyMap[stored]);
+    return legacyMap[stored];
+  }
+  return stored || '#252530';
 }
 
 interface AppState {
@@ -44,6 +54,7 @@ interface AppState {
   templateLibraryOpen: boolean;
   showToast: string | null;
   lang: Lang;
+  newEffectModalOpen: boolean;
 
   setAISettings: (s: Partial<AISettings>) => void;
   setAppMode: (m: AppMode) => void;
@@ -58,12 +69,14 @@ interface AppState {
   setShowAxes: (v: boolean) => void;
   setActivePanel: (p: 'chat' | 'effects' | 'history') => void;
   setSelectedModuleKey: (key: string | null) => void;
+  adjustPanelSize: (key: keyof PanelSizes, delta: number) => void;
   setPanelSize: (key: keyof PanelSizes, value: number) => void;
   setSettingsOpen: (v: boolean) => void;
   setExportOpen: (v: boolean) => void;
   setTemplateLibraryOpen: (v: boolean) => void;
   showToastMessage: (msg: string) => void;
   setLang: (l: Lang) => void;
+  setNewEffectModalOpen: (v: boolean) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -85,6 +98,7 @@ export const useAppStore = create<AppState>((set) => ({
   templateLibraryOpen: false,
   showToast: null,
   lang: 'zh',
+  newEffectModalOpen: false,
 
   setAISettings: (s) => set(state => ({ aiSettings: { ...state.aiSettings, ...s }, appMode: s.apiKey !== undefined ? (s.apiKey ? 'llm' : 'demo') : state.appMode })),
   setAppMode: (m) => set({ appMode: m }),
@@ -102,6 +116,14 @@ export const useAppStore = create<AppState>((set) => ({
   setShowAxes: (v) => set({ showAxes: v }),
   setActivePanel: (p) => set({ activePanel: p }),
   setSelectedModuleKey: (key) => set({ selectedModuleKey: key }),
+  adjustPanelSize: (key, delta) => set(s => {
+    const min = key === 'preview' ? 120 : 200;
+    const max = key === 'preview' ? 520 : 560;
+    const next = Math.min(max, Math.max(min, s.panelSizes[key] + delta));
+    const panelSizes = { ...s.panelSizes, [key]: next };
+    localStorage.setItem(PANEL_SIZES_KEY, JSON.stringify(panelSizes));
+    return { panelSizes };
+  }),
   setPanelSize: (key, value) => set(s => {
     const panelSizes = { ...s.panelSizes, [key]: Math.max(key === 'preview' ? 120 : 200, value) };
     localStorage.setItem(PANEL_SIZES_KEY, JSON.stringify(panelSizes));
@@ -111,5 +133,6 @@ export const useAppStore = create<AppState>((set) => ({
   setExportOpen: (v) => set({ exportOpen: v }),
   setTemplateLibraryOpen: (v) => set({ templateLibraryOpen: v }),
   showToastMessage: (msg) => { set({ showToast: msg }); setTimeout(() => set({ showToast: null }), 3000); },
-  setLang: (l) => set({ lang: l })
+  setLang: (l) => set({ lang: l }),
+  setNewEffectModalOpen: (v) => set({ newEffectModalOpen: v })
 }));

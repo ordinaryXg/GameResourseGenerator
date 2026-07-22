@@ -198,11 +198,73 @@ button.danger {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 16px;
+  padding: 0 12px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   height: var(--toolbar-height);
   flex-shrink: 0;
+}
+
+.unified-toolbar {
+  -webkit-app-region: drag;
+  padding-right: 140px; /* space for window controls on Windows overlay */
+}
+
+.unified-toolbar button,
+.unified-toolbar select,
+.unified-toolbar .toolbar-tabs,
+.unified-toolbar .toolbar-tab,
+.unified-toolbar .badge {
+  -webkit-app-region: no-drag;
+}
+
+.toolbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-primary);
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border-color);
+  flex-shrink: 0;
+}
+
+.toolbar-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.toolbar-tab {
+  height: var(--control-height);
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 400;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.toolbar-tab:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.toolbar-tab.active {
+  font-weight: 600;
+  background: var(--bg-tertiary);
+  border-color: var(--border-color);
+  color: var(--text-primary);
 }
 
 .toolbar .spacer {
@@ -290,6 +352,165 @@ button.danger {
   fill: var(--text-primary) !important;
   max-width: 14px;
   max-height: 14px;
+}
+
+/* Context menu */
+.context-menu {
+  position: fixed;
+  z-index: 2000;
+  min-width: 160px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  padding: 4px;
+}
+
+.context-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.context-menu-item:hover:not(:disabled) {
+  background: var(--bg-tertiary);
+}
+
+.context-menu-item.danger {
+  color: var(--error);
+}
+
+.context-menu-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Preview viewport */
+.preview-viewport {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  cursor: grab;
+  background: var(--bg-primary);
+}
+
+.preview-viewport canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
+
+/* Node editor */
+.node-editor-root {
+  width: 100%;
+  height: 100%;
+  background: var(--bg-primary);
+}
+
+.node-editor-root .react-flow__node {
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.node-editor-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.module-node {
+  --module-color: #58a6ff;
+  min-width: 168px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(33,38,45,0.95) 0%, rgba(22,27,34,0.98) 100%);
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06);
+  transition: border-color 0.15s, box-shadow 0.15s, opacity 0.15s;
+  overflow: hidden;
+}
+
+.module-node.is-selected {
+  border-color: var(--module-color);
+  box-shadow: 0 0 0 1px var(--module-color), 0 6px 20px rgba(0,0,0,0.45);
+}
+
+.module-node.is-disabled {
+  opacity: 0.55;
+}
+
+.module-node.is-main {
+  min-width: 180px;
+  border-color: rgba(88,166,255,0.4);
+}
+
+.module-node-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-left: 3px solid var(--module-color);
+}
+
+.module-node-icon {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--module-color);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--module-color) 60%, transparent);
+  flex-shrink: 0;
+}
+
+.module-node-content {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.module-node-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.module-node-badge {
+  font-size: 10px;
+  color: var(--text-secondary);
+  letter-spacing: 0.02em;
+}
+
+.module-node-badge.on {
+  color: var(--success);
+}
+
+.module-handle {
+  width: 8px !important;
+  height: 8px !important;
+  background: var(--module-color) !important;
+  border: 2px solid var(--bg-secondary) !important;
+}
+
+.node-minimap {
+  background: var(--bg-secondary) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: var(--radius-md) !important;
+}
+
+.node-editor-root .react-flow__edge-path {
+  stroke-linecap: round;
 }
 
 /* Status bar */

@@ -1,5 +1,6 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, nativeImage } from 'electron';
 import { join } from 'path';
+import { existsSync } from 'fs';
 import { writeFile, mkdir, access } from 'fs/promises';
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
@@ -9,20 +10,31 @@ let openaiClient: OpenAI | null = null;
 let anthropicClient: Anthropic | null = null;
 
 function getIconPath() {
-  return process.env.VITE_DEV_SERVER_URL
-    ? join(__dirname, '../public/icon.svg')
-    : join(__dirname, '../dist/icon.svg');
+  const candidates = process.env.VITE_DEV_SERVER_URL
+    ? [join(__dirname, '../public/icon.png'), join(__dirname, '../public/icon.svg')]
+    : [join(__dirname, '../dist/icon.png'), join(__dirname, '../dist/icon.svg')];
+  return candidates.find(p => existsSync(p)) || candidates[0];
 }
 
 function createWindow() {
+  const iconPath = getIconPath();
+  const isWin = process.platform === 'win32';
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
     minWidth: 1280,
     minHeight: 720,
     title: 'FX Studio',
-    icon: getIconPath(),
-    backgroundColor: '#0d1117',
+    icon: nativeImage.createFromPath(iconPath),
+    backgroundColor: '#161b22',
+    ...(isWin ? {
+      titleBarStyle: 'hidden',
+      titleBarOverlay: {
+        color: '#161b22',
+        symbolColor: '#e6edf3',
+        height: 44
+      }
+    } : {}),
     webPreferences: {
       preload: join(__dirname, 'preload.js'),
       nodeIntegration: false,

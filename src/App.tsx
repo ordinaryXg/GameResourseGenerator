@@ -12,6 +12,7 @@ import { ShaderEditor } from '@/components/editor/ShaderEditor';
 import { AnimationEditor } from '@/components/editor/AnimationEditor';
 import { SettingsModal } from '@/components/layout/SettingsModal';
 import { ExportModal } from '@/components/layout/ExportModal';
+import { NewEffectModal } from '@/components/layout/NewEffectModal';
 import { ResizeHandle } from '@/components/layout/ResizeHandle';
 import { usePrefabImport } from '@/hooks/usePrefabImport';
 import { useAppShortcuts } from '@/hooks/useKeyboardShortcuts';
@@ -20,8 +21,9 @@ const App: React.FC = () => {
   const {
     effectType, appMode, previewVisible, templateLibraryOpen,
     settingsOpen, exportOpen, showToast, isStreaming, activePanel,
-    panelSizes, setEffectType, setPreviewVisible, setTemplateLibraryOpen,
-    setSettingsOpen, setExportOpen, setActivePanel, setPanelSize, showToastMessage
+    panelSizes, aiSettings, setEffectType, setPreviewVisible, setTemplateLibraryOpen,
+    setSettingsOpen, setExportOpen, setActivePanel, adjustPanelSize, showToastMessage,
+    newEffectModalOpen, setNewEffectModalOpen
   } = useAppStore();
 
   const {
@@ -53,12 +55,16 @@ const App: React.FC = () => {
   }, [syncEffectToSession]);
 
   const handleNewEffect = useCallback(() => {
-    createSession();
-  }, [createSession]);
+    setNewEffectModalOpen(true);
+  }, [setNewEffectModalOpen]);
 
   const handleExport = useCallback(() => {
     if (currentEffect) setExportOpen(true);
   }, [currentEffect, setExportOpen]);
+
+  const resizeLeft = useCallback((d: number) => adjustPanelSize('left', d), [adjustPanelSize]);
+  const resizeRight = useCallback((d: number) => adjustPanelSize('right', -d), [adjustPanelSize]);
+  const resizePreview = useCallback((d: number) => adjustPanelSize('preview', -d), [adjustPanelSize]);
 
   if (templateLibraryOpen) {
     return <TemplateLibrary />;
@@ -66,7 +72,28 @@ const App: React.FC = () => {
 
   return (
     <>
-      <div className="toolbar">
+      <div className="toolbar unified-toolbar">
+        <div className="toolbar-brand">
+          <img src="/icon.png" alt="" width={22} height={22} style={{ borderRadius: 5 }} />
+          <span>FX Studio</span>
+        </div>
+
+        <div className="toolbar-divider" />
+
+        <div className="toolbar-tabs">
+          {(['chat', 'effects', 'history'] as const).map(tab => (
+            <button
+              key={tab}
+              className={`toolbar-tab${activePanel === tab ? ' active' : ''}`}
+              onClick={() => setActivePanel(tab)}
+            >
+              {tab === 'chat' ? '对话' : tab === 'effects' ? '特效' : '历史'}
+            </button>
+          ))}
+        </div>
+
+        <div className="toolbar-divider" />
+
         <button className="btn-sm" onClick={handleNewEffect} title="新建特效">+ 新建</button>
         <button className="btn-sm" onClick={handleImportClick} title="导入 .prefab">导入</button>
         <button className="btn-sm" onClick={() => {
@@ -113,7 +140,15 @@ const App: React.FC = () => {
         >
           {previewVisible ? '隐藏预览' : '显示预览'}
         </button>
+
         <div className="spacer" />
+
+        {activePanel === 'chat' && (
+          appMode === 'demo'
+            ? <span className="badge badge-demo">Demo</span>
+            : <span className="badge badge-llm">{aiSettings.model}</span>
+        )}
+
         <button
           className="btn-sm"
           onClick={handleExport}
@@ -145,23 +180,12 @@ const App: React.FC = () => {
         )}
 
         <div style={{ width: panelSizes.left, flexShrink: 0, borderRight: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column' }}>
-          <div className="panel-tabs">
-            {(['chat', 'effects', 'history'] as const).map(tab => (
-              <button
-                key={tab}
-                className={`panel-tab${activePanel === tab ? ' active' : ''}`}
-                onClick={() => setActivePanel(tab)}
-              >
-                {tab === 'chat' ? '对话' : tab === 'effects' ? '特效' : '历史'}
-              </button>
-            ))}
-          </div>
           {activePanel === 'chat' && <ChatPanel />}
           {activePanel === 'effects' && <EffectTreePanel />}
           {activePanel === 'history' && <VersionHistoryPanel />}
         </div>
 
-        <ResizeHandle direction="horizontal" onResize={(d) => setPanelSize('left', panelSizes.left + d)} />
+        <ResizeHandle direction="horizontal" onResize={resizeLeft} />
 
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
           <div style={{ flex: 1, overflow: 'hidden' }}>
@@ -169,7 +193,7 @@ const App: React.FC = () => {
           </div>
           {previewVisible && (
             <>
-              <ResizeHandle direction="vertical" onResize={(d) => setPanelSize('preview', panelSizes.preview - d)} />
+              <ResizeHandle direction="vertical" onResize={resizePreview} />
               <div style={{ height: panelSizes.preview, borderTop: '1px solid var(--border-color)', flexShrink: 0 }}>
                 <PreviewPanel />
               </div>
@@ -177,7 +201,7 @@ const App: React.FC = () => {
           )}
         </div>
 
-        <ResizeHandle direction="horizontal" onResize={(d) => setPanelSize('right', panelSizes.right - d)} />
+        <ResizeHandle direction="horizontal" onResize={resizeRight} />
 
         <div style={{ width: panelSizes.right, flexShrink: 0, borderLeft: '1px solid var(--border-color)' }}>
           <InspectorPanel />
@@ -201,6 +225,7 @@ const App: React.FC = () => {
 
       {settingsOpen && <SettingsModal />}
       {exportOpen && <ExportModal />}
+      <NewEffectModal open={newEffectModalOpen} onClose={() => setNewEffectModalOpen(false)} />
 
       {showToast && <div className="toast">{showToast}</div>}
     </>
