@@ -4,6 +4,27 @@ import type { AISettings, EffectType } from '@/types/effect';
 export type AppMode = 'demo' | 'llm';
 export type Lang = 'zh' | 'en';
 
+interface PanelSizes {
+  left: number;
+  right: number;
+  preview: number;
+}
+
+const PANEL_SIZES_KEY = 'fx-studio-panel-sizes';
+const PREVIEW_BG_KEY = 'fx-studio-preview-bg';
+
+function loadPanelSizes(): PanelSizes {
+  try {
+    const raw = localStorage.getItem(PANEL_SIZES_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return { left: 300, right: 280, preview: 280 };
+}
+
+function loadPreviewBackground(): string {
+  return localStorage.getItem(PREVIEW_BG_KEY) || '#0d1117';
+}
+
 interface AppState {
   aiSettings: AISettings;
   appMode: AppMode;
@@ -13,7 +34,11 @@ interface AppState {
   cocosProjectPath: string;
   previewVisible: boolean;
   previewPlaying: boolean;
-  activePanel: 'chat' | 'sessions' | 'history';
+  previewBackground: string;
+  showAxes: boolean;
+  activePanel: 'chat' | 'effects' | 'history';
+  selectedModuleKey: string | null;
+  panelSizes: PanelSizes;
   settingsOpen: boolean;
   exportOpen: boolean;
   templateLibraryOpen: boolean;
@@ -29,7 +54,11 @@ interface AppState {
   setCocosProjectPath: (p: string) => void;
   setPreviewVisible: (v: boolean) => void;
   setPreviewPlaying: (v: boolean) => void;
-  setActivePanel: (p: 'chat' | 'sessions' | 'history') => void;
+  setPreviewBackground: (color: string) => void;
+  setShowAxes: (v: boolean) => void;
+  setActivePanel: (p: 'chat' | 'effects' | 'history') => void;
+  setSelectedModuleKey: (key: string | null) => void;
+  setPanelSize: (key: keyof PanelSizes, value: number) => void;
   setSettingsOpen: (v: boolean) => void;
   setExportOpen: (v: boolean) => void;
   setTemplateLibraryOpen: (v: boolean) => void;
@@ -46,7 +75,11 @@ export const useAppStore = create<AppState>((set) => ({
   cocosProjectPath: '',
   previewVisible: true,
   previewPlaying: true,
+  previewBackground: loadPreviewBackground(),
+  showAxes: true,
   activePanel: 'chat',
+  selectedModuleKey: null,
+  panelSizes: loadPanelSizes(),
   settingsOpen: false,
   exportOpen: false,
   templateLibraryOpen: false,
@@ -62,7 +95,18 @@ export const useAppStore = create<AppState>((set) => ({
   setCocosProjectPath: (p) => set({ cocosProjectPath: p }),
   setPreviewVisible: (v) => set({ previewVisible: v }),
   setPreviewPlaying: (v) => set({ previewPlaying: v }),
+  setPreviewBackground: (color) => {
+    localStorage.setItem(PREVIEW_BG_KEY, color);
+    set({ previewBackground: color });
+  },
+  setShowAxes: (v) => set({ showAxes: v }),
   setActivePanel: (p) => set({ activePanel: p }),
+  setSelectedModuleKey: (key) => set({ selectedModuleKey: key }),
+  setPanelSize: (key, value) => set(s => {
+    const panelSizes = { ...s.panelSizes, [key]: Math.max(key === 'preview' ? 120 : 200, value) };
+    localStorage.setItem(PANEL_SIZES_KEY, JSON.stringify(panelSizes));
+    return { panelSizes };
+  }),
   setSettingsOpen: (v) => set({ settingsOpen: v }),
   setExportOpen: (v) => set({ exportOpen: v }),
   setTemplateLibraryOpen: (v) => set({ templateLibraryOpen: v }),

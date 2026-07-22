@@ -1,23 +1,43 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useSessionStore } from '@/stores/session-store';
+import { useAppStore } from '@/stores/app-store';
 import type { Particle3DConfig, RangeValue, ShapeType, RenderMode } from '@/types/effect';
+import { GradientEditor } from './GradientEditor';
+import { CurveEditor } from './CurveEditor';
 
 interface SectionProps {
+  id?: string;
   title: string;
   enabled?: boolean;
   onToggle?: () => void;
   children: React.ReactNode;
   defaultOpen?: boolean;
+  highlighted?: boolean;
 }
 
-const Section: React.FC<SectionProps> = ({ title, enabled, onToggle, children, defaultOpen = true }) => {
+const Section: React.FC<SectionProps> = ({
+  id, title, enabled, onToggle, children, defaultOpen = true, highlighted = false
+}) => {
   const [open, setOpen] = useState(defaultOpen);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (highlighted) {
+      setOpen(true);
+      ref.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [highlighted]);
+
   return (
-    <div style={{
-      borderBottom: '1px solid var(--border-color)',
-      background: enabled === false ? 'var(--bg-secondary)' : 'transparent',
-      opacity: enabled === false ? 0.6 : 1
-    }}>
+    <div
+      ref={ref}
+      id={id}
+      style={{
+        borderBottom: '1px solid var(--border-color)',
+        background: highlighted ? 'rgba(88,166,255,0.08)' : enabled === false ? 'var(--bg-secondary)' : 'transparent',
+        opacity: enabled === false ? 0.6 : 1
+      }}
+    >
       <div
         style={{
           display: 'flex',
@@ -76,6 +96,7 @@ const RangeInput: React.FC<{
 
 export const InspectorPanel: React.FC = () => {
   const { currentEffect, updateEffectConfig } = useSessionStore();
+  const { selectedModuleKey } = useAppStore();
   const config = currentEffect?.config as Particle3DConfig | undefined;
 
   const updateMain = useCallback((updates: Partial<Particle3DConfig['mainModule']>) => {
@@ -91,7 +112,7 @@ export const InspectorPanel: React.FC = () => {
   const toggleModule = useCallback((moduleKey: string) => {
     updateEffectConfig((prev) => {
       const cfg = prev.config as Particle3DConfig;
-      const module = cfg[moduleKey as keyof Particle3DConfig] as any;
+      const module = cfg[moduleKey as keyof Particle3DConfig] as { enabled?: boolean };
       return {
         ...prev,
         config: {
@@ -102,10 +123,10 @@ export const InspectorPanel: React.FC = () => {
     });
   }, [updateEffectConfig]);
 
-  const updateModule = useCallback((moduleKey: string, updates: Record<string, any>) => {
+  const updateModule = useCallback((moduleKey: string, updates: Record<string, unknown>) => {
     updateEffectConfig((prev) => {
       const cfg = prev.config as Particle3DConfig;
-      const module = cfg[moduleKey as keyof Particle3DConfig] as any;
+      const module = cfg[moduleKey as keyof Particle3DConfig] as Record<string, unknown> & { enabled?: boolean };
       return {
         ...prev,
         config: {
@@ -132,19 +153,13 @@ export const InspectorPanel: React.FC = () => {
     );
   }
 
+  const isHighlighted = (key: string) => selectedModuleKey === key;
+
   return (
     <div style={{ height: '100%', overflow: 'auto' }}>
-      <div style={{
-        padding: '12px 16px',
-        borderBottom: '1px solid var(--border-color)',
-        fontWeight: 600,
-        fontSize: 14
-      }}>
-        📋 属性检查器
-      </div>
+      <div className="panel-header">属性检查器</div>
 
-      {/* Main Module */}
-      <Section title="主模块" defaultOpen={true}>
+      <Section id="section-mainModule" title="主模块" highlighted={isHighlighted('mainModule')}>
         <RangeInput label="运行时长 (秒)" value={config.mainModule.startLifetime}
           onChange={(v) => updateMain({ startLifetime: v })} min={0.01} max={60} />
         <div style={{ marginBottom: 6 }}>
@@ -172,13 +187,21 @@ export const InspectorPanel: React.FC = () => {
           <input type="checkbox" checked={config.mainModule.loop}
             onChange={(e) => updateMain({ loop: e.target.checked })} />
         </div>
+        <div style={{ marginBottom: 6 }}>
+          <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>初始颜色</label>
+          <GradientEditor
+            value={config.mainModule.startColor}
+            onChange={(v) => updateMain({ startColor: v })}
+          />
+        </div>
       </Section>
 
-      {/* Shape Module */}
       <Section
+        id="section-shapeModule"
         title="发射器形状"
         enabled={config.shapeModule.enabled}
         onToggle={() => toggleModule('shapeModule')}
+        highlighted={isHighlighted('shapeModule')}
       >
         <div style={{ marginBottom: 6 }}>
           <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>形状类型</label>
@@ -202,78 +225,80 @@ export const InspectorPanel: React.FC = () => {
           </select>
         </div>
         <RangeInput label="半径" value={{ mode: 'constant', constant: config.shapeModule.radius }}
-          onChange={(v) => {
-            updateEffectConfig((prev) => ({
-              ...prev,
-              config: {
-                ...prev.config as Particle3DConfig,
-                shapeModule: { ...(prev.config as Particle3DConfig).shapeModule, radius: v.constant ?? 1 }
-              }
-            }));
-          }} min={0.01} max={100} />
+          onChange={(v) => updateModule('shapeModule', { radius: v.constant ?? 1 })} min={0.01} max={100} />
         <RangeInput label="角度" value={{ mode: 'constant', constant: config.shapeModule.angle }}
-          onChange={(v) => {
-            updateEffectConfig((prev) => ({
-              ...prev,
-              config: {
-                ...prev.config as Particle3DConfig,
-                shapeModule: { ...(prev.config as Particle3DConfig).shapeModule, angle: v.constant ?? 25 }
-              }
-            }));
-          }} min={0} max={90} />
+          onChange={(v) => updateModule('shapeModule', { angle: v.constant ?? 25 })} min={0} max={90} />
       </Section>
 
-      {/* Color Over Lifetime */}
       <Section
+        id="section-colorOverLifetime"
         title="颜色随生命周期"
         enabled={config.colorOverLifetime.enabled}
         onToggle={() => toggleModule('colorOverLifetime')}
+        highlighted={isHighlighted('colorOverLifetime')}
       >
-        <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-          颜色渐变：{config.colorOverLifetime.color.keys.length} 个关键帧
-        </div>
+        <GradientEditor
+          value={config.colorOverLifetime.color}
+          onChange={(v) => updateModule('colorOverLifetime', { color: v })}
+        />
       </Section>
 
-      {/* Size Over Lifetime */}
       <Section
+        id="section-sizeOverLifetime"
         title="大小随生命周期"
         enabled={config.sizeOverLifetime.enabled}
         onToggle={() => toggleModule('sizeOverLifetime')}
+        highlighted={isHighlighted('sizeOverLifetime')}
       >
-        <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-          大小曲线：{config.sizeOverLifetime.size.keys.length} 个关键帧
-        </div>
+        <CurveEditor
+          value={config.sizeOverLifetime.size}
+          onChange={(v) => updateModule('sizeOverLifetime', { size: v })}
+          min={0}
+          max={10}
+        />
       </Section>
 
-      {/* Rotation Over Lifetime */}
       <Section
+        id="section-rotationOverLifetime"
         title="旋转随生命周期"
         enabled={config.rotationOverLifetime.enabled}
         onToggle={() => toggleModule('rotationOverLifetime')}
+        highlighted={isHighlighted('rotationOverLifetime')}
       >
-        <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-          旋转曲线：{config.rotationOverLifetime.rotation.keys.length} 个关键帧
-        </div>
+        <CurveEditor
+          value={config.rotationOverLifetime.rotation}
+          onChange={(v) => updateModule('rotationOverLifetime', { rotation: v })}
+          min={-360}
+          max={360}
+        />
       </Section>
 
-      {/* Velocity Over Lifetime */}
       <Section
+        id="section-velocityOverLifetime"
         title="速度随生命周期"
         enabled={config.velocityOverLifetime.enabled}
         onToggle={() => toggleModule('velocityOverLifetime')}
         defaultOpen={false}
+        highlighted={isHighlighted('velocityOverLifetime')}
       >
-        <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-          速度曲线 X/Y/Z 各 {config.velocityOverLifetime.velocityX.keys.length} 个关键帧
-        </div>
+        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>X 轴</div>
+        <CurveEditor value={config.velocityOverLifetime.velocityX}
+          onChange={(v) => updateModule('velocityOverLifetime', { velocityX: v })} min={-50} max={50} />
+        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4, marginTop: 6 }}>Y 轴</div>
+        <CurveEditor value={config.velocityOverLifetime.velocityY}
+          onChange={(v) => updateModule('velocityOverLifetime', { velocityY: v })} min={-50} max={50} />
+        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4, marginTop: 6 }}>Z 轴</div>
+        <CurveEditor value={config.velocityOverLifetime.velocityZ}
+          onChange={(v) => updateModule('velocityOverLifetime', { velocityZ: v })} min={-50} max={50} />
       </Section>
 
-      {/* Noise Module */}
       <Section
+        id="section-noiseModule"
         title="噪声模块"
         enabled={config.noiseModule.enabled}
         onToggle={() => toggleModule('noiseModule')}
         defaultOpen={false}
+        highlighted={isHighlighted('noiseModule')}
       >
         <RangeInput label="强度" value={{ mode: 'constant', constant: config.noiseModule.strength }}
           onChange={(v) => updateModule('noiseModule', { strength: v.constant ?? 10 })} min={0} max={100} />
@@ -289,12 +314,13 @@ export const InspectorPanel: React.FC = () => {
         </div>
       </Section>
 
-      {/* Trail Module */}
       <Section
+        id="section-trailModule"
         title="拖尾模块"
         enabled={config.trailModule.enabled}
         onToggle={() => toggleModule('trailModule')}
         defaultOpen={false}
+        highlighted={isHighlighted('trailModule')}
       >
         <RangeInput label="比率" value={{ mode: 'constant', constant: config.trailModule.ratio }}
           onChange={(v) => updateModule('trailModule', { ratio: v.constant ?? 1 })} min={0} max={1} />
@@ -302,12 +328,13 @@ export const InspectorPanel: React.FC = () => {
           onChange={(v) => updateModule('trailModule', { lifetime: v })} min={0.01} max={10} />
       </Section>
 
-      {/* Texture Animation */}
       <Section
+        id="section-textureAnimation"
         title="纹理动画"
         enabled={config.textureAnimation.enabled}
         onToggle={() => toggleModule('textureAnimation')}
         defaultOpen={false}
+        highlighted={isHighlighted('textureAnimation')}
       >
         <div style={{ marginBottom: 6 }}>
           <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>横向分块数</label>
@@ -323,7 +350,6 @@ export const InspectorPanel: React.FC = () => {
         </div>
       </Section>
 
-      {/* Bursts */}
       <Section title="爆发式发射 (Bursts)" defaultOpen={false}>
         <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>
           爆发数：{config.mainModule.bursts.length} 个
@@ -348,8 +374,11 @@ export const InspectorPanel: React.FC = () => {
         >+ 添加爆发</button>
       </Section>
 
-      {/* Renderer */}
-      <Section title="渲染器">
+      <Section
+        id="section-rendererModule"
+        title="渲染器"
+        highlighted={isHighlighted('rendererModule')}
+      >
         <div style={{ marginBottom: 6 }}>
           <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>渲染模式</label>
           <select value={config.rendererModule.renderMode}

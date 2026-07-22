@@ -6,12 +6,13 @@ import { NodeEditor } from '@/components/editor/NodeEditor';
 import { InspectorPanel } from '@/components/inspector/InspectorPanel';
 import { PreviewPanel } from '@/components/preview/PreviewPanel';
 import { TemplateLibrary } from '@/components/templates/TemplateLibrary';
-import { SessionsPanel } from '@/components/layout/SessionsPanel';
+import { EffectTreePanel } from '@/components/layout/EffectTreePanel';
 import { VersionHistoryPanel } from '@/components/layout/VersionHistoryPanel';
 import { ShaderEditor } from '@/components/editor/ShaderEditor';
 import { AnimationEditor } from '@/components/editor/AnimationEditor';
 import { SettingsModal } from '@/components/layout/SettingsModal';
 import { ExportModal } from '@/components/layout/ExportModal';
+import { ResizeHandle } from '@/components/layout/ResizeHandle';
 import { usePrefabImport } from '@/hooks/usePrefabImport';
 import { useAppShortcuts } from '@/hooks/useKeyboardShortcuts';
 
@@ -19,8 +20,8 @@ const App: React.FC = () => {
   const {
     effectType, appMode, previewVisible, templateLibraryOpen,
     settingsOpen, exportOpen, showToast, isStreaming, activePanel,
-    setEffectType, setPreviewVisible, setTemplateLibraryOpen,
-    setSettingsOpen, setExportOpen, setActivePanel, showToastMessage
+    panelSizes, setEffectType, setPreviewVisible, setTemplateLibraryOpen,
+    setSettingsOpen, setExportOpen, setActivePanel, setPanelSize, showToastMessage
   } = useAppStore();
 
   const {
@@ -35,7 +36,6 @@ const App: React.FC = () => {
 
   useAppShortcuts();
 
-  // Initialize: restore persisted sessions or create default
   useEffect(() => {
     if (sessions.length > 0) {
       const last = sessions[sessions.length - 1];
@@ -45,6 +45,12 @@ const App: React.FC = () => {
       useSessionStore.setState({ isLoaded: true });
     }
   }, []);
+
+  useEffect(() => {
+    const onUnload = () => syncEffectToSession();
+    window.addEventListener('beforeunload', onUnload);
+    return () => window.removeEventListener('beforeunload', onUnload);
+  }, [syncEffectToSession]);
 
   const handleNewEffect = useCallback(() => {
     createSession();
@@ -60,11 +66,10 @@ const App: React.FC = () => {
 
   return (
     <>
-      {/* Toolbar */}
       <div className="toolbar">
-        <button onClick={handleNewEffect} title="新建特效">+ 新建</button>
-        <button onClick={handleImportClick} title="导入 .prefab">📥 导入</button>
-        <button onClick={() => {
+        <button className="btn-sm" onClick={handleNewEffect} title="新建特效">+ 新建</button>
+        <button className="btn-sm" onClick={handleImportClick} title="导入 .prefab">导入</button>
+        <button className="btn-sm" onClick={() => {
           if (currentEffect) {
             syncEffectToSession();
             const template = {
@@ -78,9 +83,9 @@ const App: React.FC = () => {
             localStorage.setItem('cocos-custom-templates', JSON.stringify(existing));
             showToastMessage(`模板「${currentEffect.name}」已保存`);
           }
-        }} title="保存为模板">💾 保存</button>
-        <button onClick={() => setTemplateLibraryOpen(true)} title="模板库">
-          📁 模板库
+        }} title="保存为模板">保存</button>
+        <button className="btn-sm" onClick={() => setTemplateLibraryOpen(true)} title="模板库">
+          模板库
         </button>
         <input
           ref={fileInputRef}
@@ -91,8 +96,9 @@ const App: React.FC = () => {
           onChange={handleFileChange}
         />
         <select
+          className="select-sm"
           value={effectType}
-          onChange={(e) => setEffectType(e.target.value as any)}
+          onChange={(e) => setEffectType(e.target.value as typeof effectType)}
           style={{ width: 120 }}
         >
           <option value="particle3d">3D 粒子</option>
@@ -101,100 +107,83 @@ const App: React.FC = () => {
           <option value="animation">动画</option>
         </select>
         <button
+          className="btn-sm"
           onClick={() => setPreviewVisible(!previewVisible)}
           title={previewVisible ? '隐藏预览' : '显示预览'}
         >
-          {previewVisible ? '👁 预览' : '👁‍🗨 预览'}
+          {previewVisible ? '隐藏预览' : '显示预览'}
         </button>
         <div className="spacer" />
         <button
+          className="btn-sm"
           onClick={handleExport}
           disabled={!currentEffect || isStreaming}
           title="导出"
         >
-          📤 导出
+          导出
         </button>
-        <button onClick={() => setSettingsOpen(true)} title="设置">⚙</button>
+        <button className="btn-sm" onClick={() => setSettingsOpen(true)} title="设置">设置</button>
       </div>
 
-      {/* Main Content */}
       <div
-        style={{
-          display: 'flex',
-          flex: 1,
-          overflow: 'hidden',
-          position: 'relative'
-        }}
+        style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
         {isDragOver && (
           <div style={{
-            position: 'absolute',
-            inset: 0,
+            position: 'absolute', inset: 0,
             background: 'rgba(88, 166, 255, 0.15)',
             border: '2px dashed var(--accent)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 50,
-            pointerEvents: 'none',
-            fontSize: 18,
-            color: 'var(--accent)',
-            fontWeight: 600
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 50, pointerEvents: 'none',
+            fontSize: 18, color: 'var(--accent)', fontWeight: 600
           }}>
-            📥 释放以导入 .prefab 文件
+            释放以导入 .prefab 文件
           </div>
         )}
-        {/* Left: Chat / Sessions Panel */}
-        <div style={{ width: 300, flexShrink: 0, borderRight: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column' }}>
-          {/* Tab switcher */}
-          <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)' }}>
-            {(['chat', 'sessions', 'history'] as const).map(tab => (
+
+        <div style={{ width: panelSizes.left, flexShrink: 0, borderRight: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column' }}>
+          <div className="panel-tabs">
+            {(['chat', 'effects', 'history'] as const).map(tab => (
               <button
                 key={tab}
+                className={`panel-tab${activePanel === tab ? ' active' : ''}`}
                 onClick={() => setActivePanel(tab)}
-                style={{
-                  flex: 1,
-                  padding: '6px 4px',
-                  fontSize: 12,
-                  fontWeight: activePanel === tab ? 600 : 400,
-                  background: activePanel === tab ? 'var(--bg-secondary)' : 'transparent',
-                  border: 'none',
-                  borderBottom: activePanel === tab ? '2px solid var(--accent)' : '2px solid transparent',
-                  borderRadius: 0,
-                  color: activePanel === tab ? 'var(--text-primary)' : 'var(--text-secondary)'
-                }}
               >
-                {tab === 'chat' ? '💬 对话' : tab === 'sessions' ? '📁 会话' : '📜 历史'}
+                {tab === 'chat' ? '对话' : tab === 'effects' ? '特效' : '历史'}
               </button>
             ))}
           </div>
           {activePanel === 'chat' && <ChatPanel />}
-          {activePanel === 'sessions' && <SessionsPanel />}
+          {activePanel === 'effects' && <EffectTreePanel />}
           {activePanel === 'history' && <VersionHistoryPanel />}
         </div>
 
-        {/* Center: Node Editor + Preview */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <ResizeHandle direction="horizontal" onResize={(d) => setPanelSize('left', panelSizes.left + d)} />
+
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
           <div style={{ flex: 1, overflow: 'hidden' }}>
             {effectType === 'shader' ? <ShaderEditor /> : effectType === 'animation' ? <AnimationEditor /> : <NodeEditor />}
           </div>
           {previewVisible && (
-            <div style={{ height: 280, borderTop: '1px solid var(--border-color)', flexShrink: 0 }}>
-              <PreviewPanel />
-            </div>
+            <>
+              <ResizeHandle direction="vertical" onResize={(d) => setPanelSize('preview', panelSizes.preview - d)} />
+              <div style={{ height: panelSizes.preview, borderTop: '1px solid var(--border-color)', flexShrink: 0 }}>
+                <PreviewPanel />
+              </div>
+            </>
           )}
         </div>
 
-        {/* Right: Inspector */}
-        <div style={{ width: 280, flexShrink: 0, borderLeft: '1px solid var(--border-color)' }}>
+        <ResizeHandle direction="horizontal" onResize={(d) => setPanelSize('right', panelSizes.right - d)} />
+
+        <div style={{ width: panelSizes.right, flexShrink: 0, borderLeft: '1px solid var(--border-color)' }}>
           <InspectorPanel />
         </div>
       </div>
 
-      {/* Status Bar */}
       <div className="statusbar">
         <span>特效：{currentEffect?.name || '无'}</span>
         <span>|</span>
@@ -210,11 +199,9 @@ const App: React.FC = () => {
         <span>{isStreaming ? '生成中...' : '就绪'}</span>
       </div>
 
-      {/* Modals */}
       {settingsOpen && <SettingsModal />}
       {exportOpen && <ExportModal />}
 
-      {/* Toast */}
       {showToast && <div className="toast">{showToast}</div>}
     </>
   );

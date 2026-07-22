@@ -14,7 +14,7 @@ export const ChatPanel: React.FC = () => {
   } = useAppStore();
 
   const {
-    messages, currentEffect, addMessage, setCurrentEffect
+    messages, currentEffect, addMessage, setCurrentEffect, activeSessionId
   } = useSessionStore();
 
   const [input, setInput] = useState('');
@@ -23,10 +23,10 @@ export const ChatPanel: React.FC = () => {
 
   // Welcome message
   useEffect(() => {
-    if (messages.length === 0) {
+    if (messages.length === 0 && activeSessionId) {
       const welcomeMsg = appMode === 'demo'
-        ? '👋 欢迎使用 **Cocos AI 特效生成器**！\n\n当前为 **Demo 模式**，支持以下关键词：\n- 🔥 **火焰特效**\n- ❄️ **雪花飘落**\n- 🌧️ **下雨效果**\n- ✨ **魔法星光**\n- 💥 **爆炸效果**\n\n描述你想要的特效，或配置 API Key 切换到 AI 生成模式。'
-        : '👋 欢迎使用 **Cocos AI 特效生成器**！\n\n用自然语言描述你想要的特效，AI 将为你生成粒子效果。';
+        ? '👋 欢迎使用 **FX Studio 特效工坊**！\n\n当前为 **Demo 模式**，支持以下关键词：\n- 🔥 **火焰特效**\n- ❄️ **雪花飘落**\n- 🌧️ **下雨效果**\n- ✨ **魔法星光**\n- 💥 **爆炸效果**\n\n描述你想要的特效，或配置 API Key 切换到 AI 生成模式。'
+        : '👋 欢迎使用 **FX Studio 特效工坊**！\n\n用自然语言描述你想要的特效，AI 将为你生成粒子效果。';
       addMessage({
         id: generateId(),
         role: 'assistant',
@@ -34,7 +34,7 @@ export const ChatPanel: React.FC = () => {
         timestamp: Date.now()
       });
     }
-  }, []);
+  }, [activeSessionId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -164,14 +164,8 @@ export const ChatPanel: React.FC = () => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Header */}
-      <div style={{
-        padding: '12px 16px',
-        borderBottom: '1px solid var(--border-color)',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8
-      }}>
-        <span style={{ fontWeight: 600, fontSize: 15 }}>🤖 AI 对话</span>
+      <div className="panel-header">
+        <span>AI 对话</span>
         {appMode === 'demo' ? (
           <span className="badge badge-demo">Demo 模式</span>
         ) : (

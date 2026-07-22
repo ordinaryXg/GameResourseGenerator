@@ -8,13 +8,20 @@ let mainWindow: BrowserWindow | null = null;
 let openaiClient: OpenAI | null = null;
 let anthropicClient: Anthropic | null = null;
 
+function getIconPath() {
+  return process.env.VITE_DEV_SERVER_URL
+    ? join(__dirname, '../public/icon.svg')
+    : join(__dirname, '../dist/icon.svg');
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
     minWidth: 1280,
     minHeight: 720,
-    title: 'Cocos AI 特效生成器',
+    title: 'FX Studio',
+    icon: getIconPath(),
     backgroundColor: '#0d1117',
     webPreferences: {
       preload: join(__dirname, 'preload.js'),

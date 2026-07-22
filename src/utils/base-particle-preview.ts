@@ -25,13 +25,30 @@ export abstract class BaseParticlePreview {
   protected animationId: number | null = null;
   protected container: HTMLElement | null = null;
   protected config: Particle3DConfig | null = null;
+  protected axesHelper: THREE.AxesHelper;
 
   constructor() {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x0d1117);
     const gridHelper = new THREE.GridHelper(10, 10, 0x30363d, 0x21262d);
     this.scene.add(gridHelper);
+    this.axesHelper = new THREE.AxesHelper(2);
+    this.scene.add(this.axesHelper);
     this.scene.add(new THREE.AmbientLight(0x404040));
+  }
+
+  setBackground(color: string) {
+    if (color === 'transparent') {
+      this.scene.background = null;
+      this.renderer?.setClearColor(0x000000, 0);
+    } else {
+      this.scene.background = new THREE.Color(color);
+      this.renderer?.setClearColor(new THREE.Color(color), 1);
+    }
+  }
+
+  setAxesVisible(visible: boolean) {
+    this.axesHelper.visible = visible;
   }
 
   protected initRenderer() {
@@ -153,8 +170,10 @@ export abstract class BaseParticlePreview {
     const vel = this.getEmitVelocity(cfg);
     const lifetime = this.getValueFromRange(cfg.mainModule.startLifetime);
     const size = this.getValueFromRange(cfg.mainModule.startSize3D.x);
-    const c0 = cfg.mainModule.startColor.keys[0]?.color || [1,1,1,1];
-    const c1 = cfg.mainModule.startColor.keys[cfg.mainModule.startColor.keys.length-1]?.color || [1,1,1,0];
+    const startKeys = cfg.mainModule.startColor.keys;
+    const colorKeys = cfg.colorOverLifetime.enabled ? cfg.colorOverLifetime.color.keys : startKeys;
+    const c0 = startKeys[0]?.color || [1, 1, 1, 1];
+    const c1 = colorKeys[colorKeys.length - 1]?.color || startKeys[startKeys.length - 1]?.color || [1, 1, 1, 0];
 
     const canvas = document.createElement('canvas'); canvas.width = 32; canvas.height = 32;
     const ctx = canvas.getContext('2d')!;

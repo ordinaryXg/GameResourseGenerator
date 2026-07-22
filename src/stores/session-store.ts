@@ -30,6 +30,22 @@ function saveSessions(sessions: Session[]) {
   } catch { /* ignore quota errors */ }
 }
 
+function syncSessionsWithCurrent(
+  sessions: Session[],
+  activeSessionId: string | null,
+  currentEffect: EffectConfig | null,
+  messages: ChatMessage[]
+): Session[] {
+  if (!activeSessionId || !currentEffect) return sessions;
+  const updated = sessions.map(sess =>
+    sess.id === activeSessionId
+      ? { ...sess, effect: currentEffect, messages, updatedAt: Date.now() }
+      : sess
+  );
+  saveSessions(updated);
+  return updated;
+}
+
 interface SessionState {
   sessions: Session[];
   activeSessionId: string | null;
@@ -80,13 +96,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   switchSession: (id) => {
     const { sessions, activeSessionId, currentEffect, messages } = get();
-    if (activeSessionId && currentEffect) {
-      const updated = sessions.map(sess => sess.id === activeSessionId ? { ...sess, effect: currentEffect, messages, updatedAt: Date.now() } : sess);
-      saveSessions(updated);
-      set(s => ({ sessions: updated }));
+    const synced = syncSessionsWithCurrent(sessions, activeSessionId, currentEffect, messages);
+    const target = synced.find(s => s.id === id);
+    if (target) {
+      set({ sessions: synced, activeSessionId: id, currentEffect: target.effect, messages: target.messages });
     }
-    const target = sessions.find(s => s.id === id);
-    if (target) set({ activeSessionId: id, currentEffect: target.effect, messages: target.messages });
   },
 
   renameSession: (id, name) => set(s => {
@@ -113,13 +127,26 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     set({ sessions: next, activeSessionId: nextId, currentEffect: target?.effect || null, messages: target?.messages || [] });
   },
 
-  setCurrentEffect: (effect) => set({ currentEffect: effect }),
-  updateEffectConfig: (updater) => set(s => ({ currentEffect: s.currentEffect ? updater(s.currentEffect) : null })),
-  addMessage: (msg) => set(s => ({ messages: [...s.messages, msg] })),
+  setCurrentEffect: (effect) => set(s => {
+    const sessions = syncSessionsWithCurrent(s.sessions, s.activeSessionId, effect, s.messages);
+    return { currentEffect: effect, sessions };
+  }),
+  updateEffectConfig: (updater) => set(s => {
+    if (!s.currentEffect) return {};
+    const currentEffect = updater(s.currentEffect);
+    const sessions = syncSessionsWithCurrent(s.sessions, s.activeSessionId, currentEffect, s.messages);
+    return { currentEffect, sessions };
+  }),
+  addMessage: (msg) => set(s => {
+    const messages = [...s.messages, msg];
+    const sessions = syncSessionsWithCurrent(s.sessions, s.activeSessionId, s.currentEffect, messages);
+    return { messages, sessions };
+  }),
   syncEffectToSession: () => {
-    const { activeSessionId, currentEffect, messages } = get();
+    const { activeSessionId, currentEffect, messages, sessions } = get();
     if (!activeSessionId || !currentEffect) return;
-    set(s => ({ sessions: s.sessions.map(sess => sess.id === activeSessionId ? { ...sess, effect: currentEffect, messages, updatedAt: Date.now() } : sess) }));
+    const updated = syncSessionsWithCurrent(sessions, activeSessionId, currentEffect, messages);
+    set({ sessions: updated });
   },
   saveVersion: () => {
     const { activeSessionId, currentEffect } = get();

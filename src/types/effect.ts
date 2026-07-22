@@ -55,6 +55,7 @@ export interface EffectMetadata {
   description?: string;
   createdAt: string;
   updatedAt: string;
+  nodeLayout?: Record<string, { x: number; y: number }>;
 }
 
 // ============================================================

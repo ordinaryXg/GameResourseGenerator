@@ -5,6 +5,7 @@ export { AnimationEditor } from './editor/AnimationEditor';
 export { InspectorPanel } from './inspector/InspectorPanel';
 export { PreviewPanel } from './preview/PreviewPanel';
 export { TemplateLibrary } from './templates/TemplateLibrary';
+export { EffectTreePanel } from './layout/EffectTreePanel';
 export { SessionsPanel } from './layout/SessionsPanel';
 export { SettingsModal } from './layout/SettingsModal';
 export { ExportModal } from './layout/ExportModal';

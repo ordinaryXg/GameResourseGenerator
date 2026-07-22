@@ -16,6 +16,9 @@
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
+  --header-height: 40px;
+  --toolbar-height: 44px;
+  --control-height: 28px;
 }
 
 * {
@@ -195,15 +198,98 @@ button.danger {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 16px;
+  padding: 0 16px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
-  height: 44px;
+  height: var(--toolbar-height);
   flex-shrink: 0;
 }
 
 .toolbar .spacer {
   flex: 1;
+}
+
+.toolbar button,
+.toolbar select,
+.btn-sm,
+.select-sm {
+  height: var(--control-height);
+  padding: 0 12px;
+  font-size: 12px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.select-sm {
+  padding: 0 8px;
+}
+
+/* Panel headers & tabs */
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--header-height);
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.panel-tabs {
+  display: flex;
+  height: var(--header-height);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.panel-tab {
+  flex: 1;
+  height: 100%;
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: 400;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.panel-tab.active {
+  font-weight: 600;
+  background: var(--bg-secondary);
+  border-bottom-color: var(--accent);
+  color: var(--text-primary);
+}
+
+/* React Flow controls - dark theme */
+.react-flow__controls {
+  box-shadow: none;
+}
+
+.react-flow__controls-button {
+  background: var(--bg-tertiary) !important;
+  border-color: var(--border-color) !important;
+  fill: var(--text-primary) !important;
+  color: var(--text-primary) !important;
+  width: 28px !important;
+  height: 28px !important;
+}
+
+.react-flow__controls-button:hover {
+  background: var(--border-color) !important;
+}
+
+.react-flow__controls-button svg {
+  fill: var(--text-primary) !important;
+  max-width: 14px;
+  max-height: 14px;
 }
 
 /* Status bar */
