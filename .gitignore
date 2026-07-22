@@ -1,0 +1,10 @@
+node_modules/
+dist/
+dist-electron/
+*.screenshot.png
+test-*.js
+test-*.cjs
+demo-screenshot.png
+debug-screenshot.png
+test-results-phase1.json
+core*
