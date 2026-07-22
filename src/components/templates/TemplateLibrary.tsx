@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useAppStore } from '@/stores/app-store';
-import { ALL_TEMPLATES } from '@/utils/ai-engine';
+import { ALL_TEMPLATES, type PresetTemplate } from '@/data/template-data';
 import type { EffectConfig, Particle3DConfig } from '@/types/effect';
 import { generateUUID } from '@/utils/effect-defaults';
 
@@ -14,10 +14,10 @@ export const TemplateLibrary: React.FC = () => {
 
   const filteredTemplates = useMemo(() => {
     if (activeCategory === '全部') return ALL_TEMPLATES;
-    return ALL_TEMPLATES.filter(t => t.category === activeCategory);
+    return ALL_TEMPLATES.filter((t: PresetTemplate) => t.category === activeCategory);
   }, [activeCategory]);
 
-  const handleApply = (template: typeof ALL_TEMPLATES[0]) => {
+  const handleApply = (template: PresetTemplate) => {
     const config = template.buildConfig();
     const effectConfig: EffectConfig = {
       id: generateUUID(),

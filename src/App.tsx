@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useRef, useEffect } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import { useAppStore } from '@/stores/app-store';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { NodeEditor } from '@/components/editor/NodeEditor';
@@ -10,9 +10,7 @@ import { ShaderEditor } from '@/components/editor/ShaderEditor';
 import { AnimationEditor } from '@/components/editor/AnimationEditor';
 import { SettingsModal } from '@/components/layout/SettingsModal';
 import { ExportModal } from '@/components/layout/ExportModal';
-import { getDefaultEffectConfig, generateId } from '@/utils/effect-defaults';
-import { parsePrefab } from '@/utils/prefab-importer';
-import { useAppStore as appStore } from '@/stores/app-store';
+import { usePrefabImport } from '@/hooks/usePrefabImport';
 
 const App: React.FC = () => {
   const {
@@ -27,23 +25,22 @@ const App: React.FC = () => {
     isStreaming,
     activePanel,
     sessions,
-    activeSessionId,
     setEffectType,
     setPreviewVisible,
     setTemplateLibraryOpen,
     setSettingsOpen,
     setExportOpen,
-    resetEffect,
-    setCurrentEffect,
-    addMessage,
-    showToastMessage,
     setActivePanel,
     createSession,
-    syncCurrentEffectToSession
+    syncCurrentEffectToSession,
+    showToastMessage
   } = useAppStore();
 
-  const [isDragOver, setIsDragOver] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const {
+    isDragOver, fileInputRef,
+    handleImportClick, handleFileChange,
+    handleDragOver, handleDragLeave, handleDrop
+  } = usePrefabImport();
 
   // Initialize default session on first load
   useEffect(() => {
@@ -53,71 +50,12 @@ const App: React.FC = () => {
   }, []);
 
   const handleNewEffect = useCallback(() => {
-    resetEffect();
-  }, [resetEffect]);
+    createSession();
+  }, [createSession]);
 
   const handleExport = useCallback(() => {
-    if (currentEffect) {
-      setExportOpen(true);
-    }
+    if (currentEffect) setExportOpen(true);
   }, [currentEffect, setExportOpen]);
-
-  // .prefab import
-  const handleImportFile = useCallback(async (file: File) => {
-    try {
-      const text = await file.text();
-      const result = parsePrefab(text);
-      setCurrentEffect(result.effectConfig);
-      addMessage({
-        id: generateId(),
-        role: 'system',
-        content: `已导入：**${result.effectConfig.name}**${result.warnings.length > 0 ? `\n\n⚠ ${result.warnings.join('\n')}` : ''}`,
-        timestamp: Date.now()
-      });
-      showToastMessage(`导入成功：${result.effectConfig.name}`);
-      if (result.warnings.length > 0) {
-        setTimeout(() => showToastMessage(result.warnings[0]), 2000);
-      }
-    } catch (err: any) {
-      showToastMessage(`导入失败：${err.message}`);
-    }
-  }, [setCurrentEffect, addMessage, showToastMessage]);
-
-  const handleImportClick = useCallback(() => {
-    fileInputRef.current?.click();
-  }, []);
-
-  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      Array.from(files).forEach(handleImportFile);
-    }
-    e.target.value = '';
-  }, [handleImportFile]);
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragOver(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragOver(false);
-  }, []);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragOver(false);
-    const files = Array.from(e.dataTransfer.files).filter(f => f.name.endsWith('.prefab'));
-    if (files.length === 0) {
-      showToastMessage('仅支持导入 .prefab 文件');
-      return;
-    }
-    files.forEach(handleImportFile);
-  }, [handleImportFile, showToastMessage]);
 
   if (templateLibraryOpen) {
     return <TemplateLibrary />;
