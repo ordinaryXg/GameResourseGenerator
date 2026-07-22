@@ -1,5 +1,6 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { useSessionStore } from '@/stores/session-store';
+import { generateAnimationClip } from '@/utils/export-formats';
 
 interface Keyframe {
   time: number;
@@ -169,6 +170,17 @@ export const AnimationEditor: React.FC = () => {
           ))}
         </select>
         <div style={{ flex: 1 }} />
+        <button
+          onClick={() => {
+            const clip = generateAnimationClip('动画', tracks, duration);
+            const blob = new Blob([clip], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `动画_${Date.now()}.anim.json`;
+            a.click(); URL.revokeObjectURL(url);
+          }}
+          style={{ fontSize: 12 }}
+        >📤 导出</button>
         <select value={easing} onChange={(e) => setEasing(e.target.value)} style={{ fontSize: 12, padding: '4px 8px' }}>
           {EASING_PRESETS.map(e => <option key={e.name} value={e.name}>{e.label}</option>)}
         </select>

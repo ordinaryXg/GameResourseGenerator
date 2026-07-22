@@ -1,13 +1,7 @@
 import React, { useMemo, useCallback } from 'react';
 import {
-  ReactFlow,
-  Node,
-  Edge,
-  Background,
-  Controls,
-  MiniMap,
-  useNodesState,
-  useEdgesState
+  ReactFlow, Node, Edge, Background, Controls, MiniMap,
+  useNodesState, useEdgesState, addEdge, Connection
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useSessionStore } from '@/stores/session-store';
@@ -28,43 +22,33 @@ const MODULE_DEFS = [
 
 function getInitialNodes(config: Particle3DConfig | null): Node[] {
   if (!config) return [];
-
   return MODULE_DEFS.map((def, i) => {
-    const col = i % 2;
-    const row = Math.floor(i / 2);
+    const col = i % 2; const row = Math.floor(i / 2);
     const enabled = (config[def.key as keyof Particle3DConfig] as any)?.enabled !== false;
-
     return {
-      id: def.key,
-      type: 'default',
+      id: def.key, type: 'default',
       position: { x: col * 200 + 20, y: row * 70 + 20 },
-      data: { label: def.label },
+      data: { label: def.label, moduleKey: def.key, enabled },
       style: {
         background: enabled ? 'var(--bg-tertiary)' : 'var(--bg-secondary)',
         border: `2px solid ${enabled ? def.color : 'var(--border-color)'}`,
         color: enabled ? 'var(--text-primary)' : 'var(--text-secondary)',
-        borderRadius: 'var(--radius-md)',
-        padding: '8px 16px',
-        fontSize: 13,
-        opacity: enabled ? 1 : 0.5,
-        width: 160
+        borderRadius: 'var(--radius-md)', padding: '8px 16px', fontSize: 13,
+        opacity: enabled ? 1 : 0.5, width: 160, cursor: 'pointer'
       }
     };
   });
 }
 
 function getInitialEdges(): Edge[] {
-  return MODULE_DEFS.slice(1).map((def) => ({
-    id: `e-main-${def.key}`,
-    source: 'mainModule',
-    target: def.key,
-    animated: true,
-    style: { stroke: 'var(--border-color)', strokeWidth: 1 }
+  return MODULE_DEFS.slice(1).map(def => ({
+    id: `e-main-${def.key}`, source: 'mainModule', target: def.key,
+    animated: true, style: { stroke: 'var(--border-color)', strokeWidth: 1 }
   }));
 }
 
 export const NodeEditor: React.FC = () => {
-  const { currentEffect } = useSessionStore();
+  const { currentEffect, updateEffectConfig } = useSessionStore();
   const config = currentEffect?.config as Particle3DConfig | undefined;
 
   const initialNodes = useMemo(() => getInitialNodes(config || null), [config]);
@@ -73,21 +57,28 @@ export const NodeEditor: React.FC = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
-  // Update nodes when config changes
-  React.useEffect(() => {
-    setNodes(getInitialNodes(config || null));
-  }, [config, setNodes]);
+  React.useEffect(() => { setNodes(getInitialNodes(config || null)); }, [config, setNodes]);
+
+  // Enable interactive node connections
+  const onConnect = useCallback((connection: Connection) => {
+    setEdges((eds) => addEdge({ ...connection, animated: true, style: { stroke: 'var(--accent)', strokeWidth: 2 } }, eds));
+  }, [setEdges]);
+
+  // Click node to toggle module
+  const onNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
+    const moduleKey = node.data.moduleKey as string;
+    if (!moduleKey || !config) return;
+    const module = (config as any)[moduleKey];
+    updateEffectConfig((prev) => {
+      const cfg = prev.config as Particle3DConfig;
+      (cfg as any)[moduleKey] = { ...module, enabled: !module.enabled };
+      return { ...prev, config: cfg };
+    });
+  }, [config, updateEffectConfig]);
 
   if (!currentEffect) {
     return (
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '100%',
-        color: 'var(--text-secondary)',
-        fontSize: 14
-      }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-secondary)', fontSize: 14 }}>
         在左侧对话面板输入特效描述以开始
       </div>
     );
@@ -96,22 +87,15 @@ export const NodeEditor: React.FC = () => {
   return (
     <div style={{ width: '100%', height: '100%' }}>
       <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        fitView
-        nodesDraggable={false}
-        nodesConnectable={false}
-        elementsSelectable={false}
+        nodes={nodes} edges={edges}
+        onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
+        onConnect={onConnect} onNodeClick={onNodeClick}
+        fitView nodesDraggable nodesConnectable
       >
         <Background color="var(--border-color)" gap={20} />
         <Controls />
-        <MiniMap
-          style={{ background: 'var(--bg-secondary)' }}
-          maskColor="rgba(0,0,0,0.7)"
-          nodeColor={(n) => n.style?.border?.toString().includes('var(--border-color)') ? '#666' : '#58a6ff'}
-        />
+        <MiniMap style={{ background: 'var(--bg-secondary)' }} maskColor="rgba(0,0,0,0.7)"
+          nodeColor={(n) => n.style?.border?.toString().includes('var(--border-color)') ? '#666' : '#58a6ff'} />
       </ReactFlow>
     </div>
   );

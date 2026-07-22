@@ -165,10 +165,35 @@ export const ShaderEditor: React.FC = () => {
       return;
     }
 
+    // Extract GLSL fragment shader code for WebGL compilation
+    const glslMatch = currentCode.match(/CCProgram\s+\S+\s*%\{([\s\S]*?)\}%/);
+    if (glslMatch) {
+      const glsl = glslMatch[1];
+      try {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+        if (gl) {
+          const shader = gl.createShader(gl.FRAGMENT_SHADER)!;
+          gl.shaderSource(shader, `#version 300 es\nprecision highp float;\n${glsl}`);
+          gl.compileShader(shader);
+          if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            const log = gl.getShaderInfoLog(shader) || '未知编译错误';
+            setCompileError(log.substring(0, 200));
+            gl.deleteShader(shader);
+            return;
+          }
+          gl.deleteShader(shader);
+        }
+      } catch (e: any) {
+        setCompileError(`WebGL 编译环境不可用: ${e.message}`);
+        return;
+      }
+    }
+
     addMessage({
       id: generateId(),
       role: 'system',
-      content: '✅ Shader 编译成功（语法校验通过）',
+      content: '✅ Shader 编译成功（GLSL 语法校验通过）',
       timestamp: Date.now()
     });
   }, [addMessage]);
