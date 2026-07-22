@@ -3,7 +3,6 @@ import { join } from 'path';
 import { writeFile, mkdir, access } from 'fs/promises';
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
-import { safeStorage } from 'electron';
 
 let mainWindow: BrowserWindow | null = null;
 let openaiClient: OpenAI | null = null;

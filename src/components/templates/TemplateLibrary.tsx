@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useAppStore } from '@/stores/app-store';
 import { useSessionStore } from '@/stores/session-store';
 import { ALL_TEMPLATES, type PresetTemplate } from '@/data/template-data';
-import type { EffectConfig, Particle3DConfig } from '@/types/effect';
+import type { EffectConfig } from '@/types/effect';
 import { generateUUID } from '@/utils/effect-defaults';
 
 const CATEGORIES = ['全部', '自然现象', '战斗特效', '魔法技能', '环境氛围'];

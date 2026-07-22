@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AISettings, AIProvider, AIModel, EffectType } from '@/types/effect';
+import type { AISettings, EffectType } from '@/types/effect';
 
 export type AppMode = 'demo' | 'llm';
 export type Lang = 'zh' | 'en';

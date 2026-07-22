@@ -1,14 +1,33 @@
 import { create } from 'zustand';
-import type { EffectConfig, ChatMessage, EffectType } from '@/types/effect';
+import type { EffectConfig, ChatMessage } from '@/types/effect';
 import { getDefaultEffectConfig, generateUUID } from '@/utils/effect-defaults';
+
+const STORAGE_KEY = 'cocos-effect-generator-sessions';
+const MAX_SESSIONS = 20;
 
 export interface Session {
   id: string;
   name: string;
   effect: EffectConfig;
   messages: ChatMessage[];
+  versionHistory: EffectConfig[];
   createdAt: number;
   updatedAt: number;
+}
+
+function loadSessions(): Session[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return [];
+}
+
+function saveSessions(sessions: Session[]) {
+  try {
+    const trimmed = sessions.slice(-MAX_SESSIONS);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+  } catch { /* ignore quota errors */ }
 }
 
 interface SessionState {
@@ -16,6 +35,7 @@ interface SessionState {
   activeSessionId: string | null;
   currentEffect: EffectConfig | null;
   messages: ChatMessage[];
+  isLoaded: boolean;
 
   createSession: (name?: string) => string;
   switchSession: (sessionId: string) => void;
@@ -26,6 +46,8 @@ interface SessionState {
   updateEffectConfig: (updater: (prev: EffectConfig) => EffectConfig) => void;
   addMessage: (msg: ChatMessage) => void;
   syncEffectToSession: () => void;
+  saveVersion: () => void;
+  restoreVersion: (index: number) => void;
   reset: () => void;
 }
 
@@ -34,41 +56,50 @@ function createDefaultSession(name = '新建特效'): Session {
   return {
     id: generateUUID(), name,
     effect: getDefaultEffectConfig('particle3d', name),
-    messages: [], createdAt: now, updatedAt: now
+    messages: [], versionHistory: [],
+    createdAt: now, updatedAt: now
   };
 }
 
 export const useSessionStore = create<SessionState>((set, get) => ({
-  sessions: [],
+  sessions: loadSessions(),
   activeSessionId: null,
   currentEffect: null,
   messages: [],
+  isLoaded: false,
 
   createSession: (name) => {
     const session = createDefaultSession(name);
-    set(s => ({ sessions: [...s.sessions, session], activeSessionId: session.id, currentEffect: session.effect, messages: [] }));
+    set(s => {
+      const sessions = [...s.sessions, session];
+      saveSessions(sessions);
+      return { sessions, activeSessionId: session.id, currentEffect: session.effect, messages: [] };
+    });
     return session.id;
   },
 
   switchSession: (id) => {
     const { sessions, activeSessionId, currentEffect, messages } = get();
     if (activeSessionId && currentEffect) {
-      set(s => ({ sessions: s.sessions.map(sess => sess.id === activeSessionId ? { ...sess, effect: currentEffect, messages, updatedAt: Date.now() } : sess) }));
+      const updated = sessions.map(sess => sess.id === activeSessionId ? { ...sess, effect: currentEffect, messages, updatedAt: Date.now() } : sess);
+      saveSessions(updated);
+      set(s => ({ sessions: updated }));
     }
     const target = sessions.find(s => s.id === id);
     if (target) set({ activeSessionId: id, currentEffect: target.effect, messages: target.messages });
   },
 
-  renameSession: (id, name) => set(s => ({
-    sessions: s.sessions.map(sess => sess.id === id ? { ...sess, name, updatedAt: Date.now() } : sess),
-    currentEffect: s.activeSessionId === id && s.currentEffect ? { ...s.currentEffect, name } : s.currentEffect
-  })),
+  renameSession: (id, name) => set(s => {
+    const sessions = s.sessions.map(sess => sess.id === id ? { ...sess, name, updatedAt: Date.now() } : sess);
+    saveSessions(sessions);
+    return { sessions, currentEffect: s.activeSessionId === id && s.currentEffect ? { ...s.currentEffect, name } : s.currentEffect };
+  }),
 
   duplicateSession: (id) => {
     const src = get().sessions.find(s => s.id === id);
     if (!src) return;
     const ns: Session = { ...src, id: generateUUID(), name: `${src.name}(1)`, effect: { ...src.effect, id: generateUUID(), name: `${src.name}(1)` }, createdAt: Date.now(), updatedAt: Date.now() };
-    set(s => ({ sessions: [...s.sessions, ns], activeSessionId: ns.id, currentEffect: ns.effect, messages: ns.messages }));
+    set(s => { const sessions = [...s.sessions, ns]; saveSessions(sessions); return { sessions, activeSessionId: ns.id, currentEffect: ns.effect, messages: ns.messages }; });
   },
 
   deleteSession: (id) => {
@@ -76,6 +107,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     if (sessions.length <= 1) return;
     const idx = sessions.findIndex(s => s.id === id);
     const next = sessions.filter(s => s.id !== id);
+    saveSessions(next);
     const nextId = next[Math.min(idx, next.length - 1)]?.id || next[0]?.id;
     const target = next.find(s => s.id === nextId);
     set({ sessions: next, activeSessionId: nextId, currentEffect: target?.effect || null, messages: target?.messages || [] });
@@ -89,5 +121,28 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     if (!activeSessionId || !currentEffect) return;
     set(s => ({ sessions: s.sessions.map(sess => sess.id === activeSessionId ? { ...sess, effect: currentEffect, messages, updatedAt: Date.now() } : sess) }));
   },
+  saveVersion: () => {
+    const { activeSessionId, currentEffect } = get();
+    if (!activeSessionId || !currentEffect) return;
+    set(s => {
+      const sessions = s.sessions.map(sess =>
+        sess.id === activeSessionId
+          ? { ...sess, versionHistory: [...sess.versionHistory.slice(-49), JSON.parse(JSON.stringify(currentEffect))], updatedAt: Date.now() }
+          : sess
+      );
+      saveSessions(sessions);
+      return { sessions };
+    });
+  },
+
+  restoreVersion: (index: number) => {
+    const { activeSessionId, sessions } = get();
+    if (!activeSessionId) return;
+    const session = sessions.find(s => s.id === activeSessionId);
+    if (!session || index < 0 || index >= session.versionHistory.length) return;
+    const restored = JSON.parse(JSON.stringify(session.versionHistory[index]));
+    set({ currentEffect: restored });
+  },
+
   reset: () => { const s = createDefaultSession(); set({ sessions: [s], activeSessionId: s.id, currentEffect: s.effect, messages: [] }); }
 }));

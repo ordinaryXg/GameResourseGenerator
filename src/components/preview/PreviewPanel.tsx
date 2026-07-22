@@ -65,18 +65,10 @@ export const PreviewPanel: React.FC = () => {
   }, [previewPlaying, effectType]);
 
   // Mouse events
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if ('onMouseDown' in preview) (preview as ParticlePreview).onMouseDown(e.clientX, e.clientY);
-  }, [effectType]);
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if ('onMouseMove' in preview) (preview as ParticlePreview).onMouseMove(e.clientX, e.clientY);
-  }, [effectType]);
-  const handleMouseUp = useCallback(() => {
-    if ('onMouseUp' in preview) (preview as ParticlePreview).onMouseUp();
-  }, [effectType]);
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    if ('onWheel' in preview) (preview as ParticlePreview).onWheel(e.deltaY);
-  }, [effectType]);
+  const handleMouseDown = useCallback((e: React.MouseEvent) => { preview.onMouseDown(e.clientX, e.clientY); }, [effectType]);
+  const handleMouseMove = useCallback((e: React.MouseEvent) => { preview.onMouseMove(e.clientX, e.clientY); }, [effectType]);
+  const handleMouseUp = useCallback(() => { preview.onMouseUp(); }, [effectType]);
+  const handleWheel = useCallback((e: React.WheelEvent) => { preview.onWheel(e.deltaY); }, [effectType]);
 
   // Keyboard
   useEffect(() => {

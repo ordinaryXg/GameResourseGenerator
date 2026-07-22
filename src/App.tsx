@@ -7,11 +7,13 @@ import { InspectorPanel } from '@/components/inspector/InspectorPanel';
 import { PreviewPanel } from '@/components/preview/PreviewPanel';
 import { TemplateLibrary } from '@/components/templates/TemplateLibrary';
 import { SessionsPanel } from '@/components/layout/SessionsPanel';
+import { VersionHistoryPanel } from '@/components/layout/VersionHistoryPanel';
 import { ShaderEditor } from '@/components/editor/ShaderEditor';
 import { AnimationEditor } from '@/components/editor/AnimationEditor';
 import { SettingsModal } from '@/components/layout/SettingsModal';
 import { ExportModal } from '@/components/layout/ExportModal';
 import { usePrefabImport } from '@/hooks/usePrefabImport';
+import { useAppShortcuts } from '@/hooks/useKeyboardShortcuts';
 
 const App: React.FC = () => {
   const {
@@ -31,10 +33,16 @@ const App: React.FC = () => {
     handleDragOver, handleDragLeave, handleDrop
   } = usePrefabImport();
 
-  // Initialize default session on first load
+  useAppShortcuts();
+
+  // Initialize: restore persisted sessions or create default
   useEffect(() => {
-    if (sessions.length === 0) {
+    if (sessions.length > 0) {
+      const last = sessions[sessions.length - 1];
+      useSessionStore.setState({ activeSessionId: last.id, currentEffect: last.effect, messages: last.messages, isLoaded: true });
+    } else {
       createSession();
+      useSessionStore.setState({ isLoaded: true });
     }
   }, []);
 
@@ -59,7 +67,16 @@ const App: React.FC = () => {
         <button onClick={() => {
           if (currentEffect) {
             syncEffectToSession();
-            showToastMessage('模板保存功能将在后续版本中提供');
+            const template = {
+              id: currentEffect.id, name: currentEffect.name,
+              description: `自定义模板 - ${currentEffect.name}`,
+              category: '自定义', tags: [],
+              effectConfig: JSON.parse(JSON.stringify(currentEffect))
+            };
+            const existing = JSON.parse(localStorage.getItem('cocos-custom-templates') || '[]');
+            existing.push(template);
+            localStorage.setItem('cocos-custom-templates', JSON.stringify(existing));
+            showToastMessage(`模板「${currentEffect.name}」已保存`);
           }
         }} title="保存为模板">💾 保存</button>
         <button onClick={() => setTemplateLibraryOpen(true)} title="模板库">
@@ -156,11 +173,7 @@ const App: React.FC = () => {
           </div>
           {activePanel === 'chat' && <ChatPanel />}
           {activePanel === 'sessions' && <SessionsPanel />}
-          {activePanel === 'history' && (
-            <div style={{ padding: 16, color: 'var(--text-secondary)', fontSize: 13, textAlign: 'center' }}>
-              版本历史将在后续版本中提供
-            </div>
-          )}
+          {activePanel === 'history' && <VersionHistoryPanel />}
         </div>
 
         {/* Center: Node Editor + Preview */}

@@ -1,5 +1,4 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { useSessionStore } from '@/stores/session-store';
 import { generateAnimationClip } from '@/utils/export-formats';
 
 interface Keyframe {

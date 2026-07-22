@@ -99,7 +99,6 @@ export function parsePrefab(jsonString: string): ImportResult {
   // Find cc.ParticleSystem component
   let psData: RawPrefabData | null = null;
   let nodeData: any = null;
-  const unsupportedModules: string[] = [];
   const warnings: string[] = [];
 
   for (const item of prefabArray) {
@@ -118,11 +117,8 @@ export function parsePrefab(jsonString: string): ImportResult {
   const name = nodeData?._name || psData._name || '导入特效';
   const main = psData._N$mainModule || {};
 
-  // Check for unsupported modules
-  const knownModules = [
-    'colorOverLifetimeModule', 'sizeOverLifetimeModule', 'rotationOverLifetimeModule',
-    'velocityOverLifetimeModule', 'noiseModule', 'trailModule', 'textureAnimationModule'
-  ];
+  // Module list for future unsupported module detection
+  // const _knownModules = ['noiseModule', 'trailModule', 'textureAnimationModule'];
 
   const config: Particle3DConfig = {
     mainModule: {
@@ -210,5 +206,5 @@ export function parsePrefab(jsonString: string): ImportResult {
     config
   };
 
-  return { effectConfig, unsupportedModules, warnings };
+  return { effectConfig, unsupportedModules: [], warnings };
 }

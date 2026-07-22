@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { useSessionStore } from '@/stores/session-store';
-import type { Particle3DConfig, RangeValue, ShapeType, RenderMode, GradientConfig } from '@/types/effect';
+import type { Particle3DConfig, RangeValue, ShapeType, RenderMode } from '@/types/effect';
 
 interface SectionProps {
   title: string;

@@ -1,6 +1,6 @@
 import type { EffectConfig, Particle3DConfig } from '@/types/effect';
-import { getDefaultEffectConfig, generateUUID, generateId } from './effect-defaults';
-import { ALL_TEMPLATES, matchTemplate, applyMicroAdjustments } from '@/data/template-data';
+import { getDefaultEffectConfig, generateUUID } from './effect-defaults';
+import { matchTemplate, applyMicroAdjustments } from '@/data/template-data';
 import type { PresetTemplate } from '@/data/template-data';
 
 export type { PresetTemplate };

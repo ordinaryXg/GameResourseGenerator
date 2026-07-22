@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Particle3DConfig, GradientConfig, RangeValue } from '@/types/effect';
+import type { Particle3DConfig, RangeValue } from '@/types/effect';
 
 interface BaseParticle {
   position: THREE.Vector3;
@@ -72,6 +72,12 @@ export abstract class BaseParticlePreview {
   play() { this.isPlaying = true; }
   pause() { this.isPlaying = false; }
   reset() { this.resetSimulation(); this.isPlaying = true; }
+
+  // Mouse interaction (overridable)
+  onMouseDown(_x: number, _y: number) {}
+  onMouseMove(_x: number, _y: number) {}
+  onMouseUp() {}
+  onWheel(_deltaY: number) {}
 
   private resetSimulation() {
     for (const p of this.particles) { this.scene.remove(p.sprite); p.material.dispose(); }

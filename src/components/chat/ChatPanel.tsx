@@ -83,6 +83,7 @@ export const ChatPanel: React.FC = () => {
           setStreamingContent('');
           setIsStreaming(false);
           setCurrentEffect(result.effectConfig);
+          useSessionStore.getState().saveVersion();
         }
       }, 20);
     } else {

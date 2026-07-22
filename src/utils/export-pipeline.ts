@@ -1,19 +1,19 @@
-import type { EffectConfig, Particle3DConfig } from '@/types/effect';
+import type { EffectConfig, Particle3DConfig, RangeValue, Vector3Range, GradientConfig, CurveConfig } from '@/types/effect';
 import { generateUUID } from './effect-defaults';
 
 // ============================================================
 // .prefab + .meta 导出管线
 // ============================================================
 
-interface PrefabNode {
-  __type__: string;
-  _name: string;
-  _objFlags: number;
-  [key: string]: any;
-}
+interface CocosRangeValue { mode: number; constant?: number; constantMin?: number; constantMax?: number; }
+interface CocosVector3Range { x: CocosRangeValue; y: CocosRangeValue; z: CocosRangeValue; }
+interface CocosColorKey { color: { r: number; g: number; b: number; a: number }; time: number; }
+interface CocosGradient { alphaKeys: any[]; colorKeys: CocosColorKey[]; colorMode: number; }
+interface CocosCurveKey { time: number; value: number; inTangent: number; outTangent: number; tangentMode: number; }
+interface CocosCurve { curve: CocosCurveKey[]; multiplier: number; }
 
-function buildParticleSystemComponent(config: Particle3DConfig, effectName: string): any {
-  const comp: any = {
+function buildParticleSystemComponent(config: Particle3DConfig): Record<string, unknown> {
+  const comp: Record<string, unknown> = {
     __type__: 'cc.ParticleSystem',
     _objFlags: 0,
     node: { __id__: 1 },
@@ -110,43 +110,25 @@ function buildParticleSystemComponent(config: Particle3DConfig, effectName: stri
   return comp;
 }
 
-function convertRangeValue(rv: any): any {
-  if (rv.mode === 'constant') {
-    return { mode: 0, constant: rv.constant };
-  }
+function convertRangeValue(rv: RangeValue): CocosRangeValue {
+  if (rv.mode === 'constant') return { mode: 0, constant: rv.constant };
   return { mode: 1, constantMin: rv.min, constantMax: rv.max };
 }
 
-function convertVector3Range(v3r: any): any {
-  return {
-    x: convertRangeValue(v3r.x),
-    y: convertRangeValue(v3r.y),
-    z: convertRangeValue(v3r.z)
-  };
+function convertVector3Range(v3r: Vector3Range): CocosVector3Range {
+  return { x: convertRangeValue(v3r.x), y: convertRangeValue(v3r.y), z: convertRangeValue(v3r.z) };
 }
 
-function convertGradient(g: any): any {
+function convertGradient(g: GradientConfig): CocosGradient {
   return {
     alphaKeys: [],
-    colorKeys: g.keys.map((k: any) => ({
-      color: { r: Math.round(k.color[0] * 255), g: Math.round(k.color[1] * 255), b: Math.round(k.color[2] * 255), a: Math.round(k.color[3] * 255) },
-      time: k.time
-    })),
+    colorKeys: g.keys.map(k => ({ color: { r: Math.round(k.color[0]*255), g: Math.round(k.color[1]*255), b: Math.round(k.color[2]*255), a: Math.round(k.color[3]*255) }, time: k.time })),
     colorMode: 0
   };
 }
 
-function convertCurve(c: any): any {
-  return {
-    curve: c.keys.map((k: any) => ({
-      time: k.time,
-      value: k.value,
-      inTangent: k.inTangent ?? 0,
-      outTangent: k.outTangent ?? 0,
-      tangentMode: 0
-    })),
-    multiplier: c.multiplier ?? 1
-  };
+function convertCurve(c: CurveConfig): CocosCurve {
+  return { curve: c.keys.map(k => ({ time: k.time, value: k.value, inTangent: k.inTangent ?? 0, outTangent: k.outTangent ?? 0, tangentMode: 0 })), multiplier: c.multiplier ?? 1 };
 }
 
 export function generatePrefab(effectConfig: EffectConfig): { prefabContent: string; metaContent: string } {
@@ -155,40 +137,23 @@ export function generatePrefab(effectConfig: EffectConfig): { prefabContent: str
   const uuid = effectConfig.id;
   const fileId = generateUUID();
 
-  const node: PrefabNode = {
-    __type__: 'cc.Node',
-    _name: name,
-    _objFlags: 0,
-    _parent: null,
-    _children: [],
-    _components: [{ __id__: 2 }],
-    _prefab: { __id__: 3 },
+  const particleSystem = buildParticleSystemComponent(config);
+
+  const prefabInfo = {
+    __type__: 'cc.PrefabInfo', root: { __id__: 1 }, asset: { __id__: 0 }, fileId, targetOverrides: null
+  };
+  const compPrefabInfo = {
+    __type__: 'cc.CompPrefabInfo', fileId: generateUUID()
+  };
+  const prefab = {
+    __type__: 'cc.Prefab', _name: name, _objFlags: 0, _native: '', data: { __id__: 1 }
+  };
+  const node = {
+    __type__: 'cc.Node', _name: name, _objFlags: 0, _parent: null, _children: [],
+    _components: [{ __id__: 2 }], _prefab: { __id__: 3 },
     _lpos: { __type__: 'cc.Vec3', x: 0, y: 0, z: 0 },
     _lrot: { __type__: 'cc.Quat', x: 0, y: 0, z: 0, w: 1 },
     _lscale: { __type__: 'cc.Vec3', x: 1, y: 1, z: 1 }
-  };
-
-  const particleSystem = buildParticleSystemComponent(config, name);
-
-  const prefabInfo = {
-    __type__: 'cc.PrefabInfo',
-    root: { __id__: 1 },
-    asset: { __id__: 0 },
-    fileId: fileId,
-    targetOverrides: null
-  };
-
-  const compPrefabInfo = {
-    __type__: 'cc.CompPrefabInfo',
-    fileId: generateUUID()
-  };
-
-  const prefab: PrefabNode = {
-    __type__: 'cc.Prefab',
-    _name: name,
-    _objFlags: 0,
-    _native: '',
-    data: { __id__: 1 }
   };
 
   const prefabContent = JSON.stringify([prefab, node, particleSystem, prefabInfo, compPrefabInfo], null, 2);
