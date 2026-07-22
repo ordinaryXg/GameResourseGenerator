@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { useAppStore } from '@/stores/app-store';
+import { useSessionStore } from '@/stores/session-store';
 import type { Particle3DConfig, RangeValue, ShapeType, RenderMode, GradientConfig } from '@/types/effect';
 
 interface SectionProps {
@@ -75,7 +75,7 @@ const RangeInput: React.FC<{
 );
 
 export const InspectorPanel: React.FC = () => {
-  const { currentEffect, updateEffectConfig } = useAppStore();
+  const { currentEffect, updateEffectConfig } = useSessionStore();
   const config = currentEffect?.config as Particle3DConfig | undefined;
 
   const updateMain = useCallback((updates: Partial<Particle3DConfig['mainModule']>) => {

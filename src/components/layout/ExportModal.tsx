@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { useAppStore } from '@/stores/app-store';
+import { useSessionStore } from '@/stores/session-store';
 import { exportToCocosProject } from '@/utils/export-pipeline';
 import { getCompatibilityReport, exportToEngine } from '@/utils/multi-engine-export';
 import type { TargetEngine } from '@/utils/multi-engine-export';
@@ -12,7 +13,8 @@ const ENGINE_OPTIONS: { value: TargetEngine; label: string }[] = [
 ];
 
 export const ExportModal: React.FC = () => {
-  const { currentEffect, cocosProjectPath, setCocosProjectPath, setExportOpen, showToastMessage } = useAppStore();
+  const { cocosProjectPath, setCocosProjectPath, setExportOpen, showToastMessage } = useAppStore();
+  const { currentEffect } = useSessionStore();
   const [projectPath, setProjectPath] = useState(cocosProjectPath);
   const [exporting, setExporting] = useState(false);
   const [targetEngine, setTargetEngine] = useState<TargetEngine>('cocos');

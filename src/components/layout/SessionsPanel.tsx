@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { useAppStore } from '@/stores/app-store';
+import { useSessionStore } from '@/stores/session-store';
 
 export const SessionsPanel: React.FC = () => {
   const {
@@ -10,7 +10,7 @@ export const SessionsPanel: React.FC = () => {
     renameSession,
     duplicateSession,
     deleteSession
-  } = useAppStore();
+  } = useSessionStore();
 
   const [search, setSearch] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);

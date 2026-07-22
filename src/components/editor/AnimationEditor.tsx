@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { useAppStore } from '@/stores/app-store';
+import { useSessionStore } from '@/stores/session-store';
 
 interface Keyframe {
   time: number;

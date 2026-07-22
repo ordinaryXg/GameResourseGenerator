@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect } from 'react';
 import { useAppStore } from '@/stores/app-store';
+import { useSessionStore } from '@/stores/session-store';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { NodeEditor } from '@/components/editor/NodeEditor';
 import { InspectorPanel } from '@/components/inspector/InspectorPanel';
@@ -14,27 +15,15 @@ import { usePrefabImport } from '@/hooks/usePrefabImport';
 
 const App: React.FC = () => {
   const {
-    currentEffect,
-    effectType,
-    appMode,
-    previewVisible,
-    templateLibraryOpen,
-    settingsOpen,
-    exportOpen,
-    showToast,
-    isStreaming,
-    activePanel,
-    sessions,
-    setEffectType,
-    setPreviewVisible,
-    setTemplateLibraryOpen,
-    setSettingsOpen,
-    setExportOpen,
-    setActivePanel,
-    createSession,
-    syncCurrentEffectToSession,
-    showToastMessage
+    effectType, appMode, previewVisible, templateLibraryOpen,
+    settingsOpen, exportOpen, showToast, isStreaming, activePanel,
+    setEffectType, setPreviewVisible, setTemplateLibraryOpen,
+    setSettingsOpen, setExportOpen, setActivePanel, showToastMessage
   } = useAppStore();
+
+  const {
+    sessions, currentEffect, createSession, syncEffectToSession
+  } = useSessionStore();
 
   const {
     isDragOver, fileInputRef,
@@ -69,7 +58,7 @@ const App: React.FC = () => {
         <button onClick={handleImportClick} title="导入 .prefab">📥 导入</button>
         <button onClick={() => {
           if (currentEffect) {
-            syncCurrentEffectToSession();
+            syncEffectToSession();
             showToastMessage('模板保存功能将在后续版本中提供');
           }
         }} title="保存为模板">💾 保存</button>

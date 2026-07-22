@@ -1,10 +1,12 @@
 import { useCallback, useRef, useState } from 'react';
 import { useAppStore } from '@/stores/app-store';
+import { useSessionStore } from '@/stores/session-store';
 import { parsePrefab } from '@/utils/prefab-importer';
 import { generateId } from '@/utils/effect-defaults';
 
 export function usePrefabImport() {
-  const { setCurrentEffect, addMessage, showToastMessage } = useAppStore();
+  const { showToastMessage } = useAppStore();
+  const { setCurrentEffect, addMessage } = useSessionStore();
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 

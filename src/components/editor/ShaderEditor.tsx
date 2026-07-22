@@ -8,7 +8,7 @@ import { oneDark } from '@codemirror/theme-one-dark';
 import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import { highlightSelectionMatches, searchKeymap } from '@codemirror/search';
 import { lintKeymap } from '@codemirror/lint';
-import { useAppStore } from '@/stores/app-store';
+import { useSessionStore } from '@/stores/session-store';
 import { generateId } from '@/utils/effect-defaults';
 
 const DEFAULT_SHADER = `// Cocos Creator 3.8 Shader
@@ -110,7 +110,7 @@ export const ShaderEditor: React.FC = () => {
   const viewRef = useRef<EditorView | null>(null);
   const [code, setCode] = useState(DEFAULT_SHADER);
   const [compileError, setCompileError] = useState<string | null>(null);
-  const { addMessage } = useAppStore();
+  const { addMessage } = useSessionStore();
 
   useEffect(() => {
     if (!editorRef.current) return;

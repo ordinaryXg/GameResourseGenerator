@@ -164,7 +164,37 @@ export interface EffectConfig {
   source: 'ai-generated' | 'template' | 'manual' | 'imported';
   tags: string[];
   metadata: EffectMetadata;
-  config: Particle3DConfig;
+  config: Particle3DConfig | Particle2DConfig;
+}
+
+// ============================================================
+// 2D 粒子配置
+// ============================================================
+
+export interface Particle2DConfig {
+  mainModule: {
+    duration: number;
+    capacity: number;
+    loop: boolean;
+    playOnAwake: boolean;
+    startLifetime: RangeValue;
+    startSpeed: RangeValue;
+    startSize: RangeValue;
+    startColor: GradientConfig;
+    gravityModifier: number;
+    rateOverTime: number;
+  };
+  shapeModule: {
+    enabled: boolean;
+    shapeType: 'box' | 'circle';
+    radius: number;
+  };
+  colorOverLifetime: { enabled: boolean; color: GradientConfig };
+  sizeOverLifetime: { enabled: boolean; size: CurveConfig };
+  rendererModule: {
+    spriteFrame?: string;
+    blendMode: 'additive' | 'alpha';
+  };
 }
 
 // ============================================================

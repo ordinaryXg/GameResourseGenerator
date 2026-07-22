@@ -1,21 +1,30 @@
 import React, { useRef, useEffect, useCallback } from 'react';
 import { useAppStore } from '@/stores/app-store';
+import { useSessionStore } from '@/stores/session-store';
 import { ParticlePreview } from '@/utils/particle-preview';
-import type { Particle3DConfig } from '@/types/effect';
+import { Particle2DPreview } from '@/utils/particle2d-preview';
+import type { Particle3DConfig, EffectType } from '@/types/effect';
 
-let previewInstance: ParticlePreview | null = null;
+type PreviewInstance = ParticlePreview | Particle2DPreview;
 
-function getPreview(): ParticlePreview {
-  if (!previewInstance) {
-    previewInstance = new ParticlePreview();
-  }
-  return previewInstance;
+const previewCache = new Map<string, PreviewInstance>();
+
+function getPreview(type: EffectType): PreviewInstance {
+  const cached = previewCache.get(type);
+  if (cached) return cached;
+
+  const instance = type === 'particle2d' ? new Particle2DPreview() : new ParticlePreview();
+  previewCache.set(type, instance);
+  return instance;
 }
 
 export const PreviewPanel: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { currentEffect, previewPlaying, setPreviewPlaying } = useAppStore();
+  const { effectType, previewPlaying, setPreviewPlaying } = useAppStore();
+  const { currentEffect } = useSessionStore();
   const config = currentEffect?.config as Particle3DConfig | undefined;
+
+  const preview = getPreview(effectType);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -24,20 +33,11 @@ export const PreviewPanel: React.FC = () => {
     let fallbackDiv: HTMLDivElement | null = null;
 
     try {
-      const preview = getPreview();
       preview.mount(container);
     } catch (err: any) {
       console.warn('WebGL not available:', err.message);
-      const fallbackDiv = document.createElement('div');
-      fallbackDiv.style.width = '100%';
-      fallbackDiv.style.height = '100%';
-      fallbackDiv.style.display = 'flex';
-      fallbackDiv.style.flexDirection = 'column';
-      fallbackDiv.style.alignItems = 'center';
-      fallbackDiv.style.justifyContent = 'center';
-      fallbackDiv.style.color = '#8b949e';
-      fallbackDiv.style.fontSize = '14px';
-      fallbackDiv.style.background = '#0d1117';
+      fallbackDiv = document.createElement('div');
+      fallbackDiv.style.cssText = 'width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#8b949e;font-size:14px;background:#0d1117';
       fallbackDiv.innerHTML = '<div>⚠ WebGL 预览在此环境不可用</div><div style="font-size:12px;margin-top:8px">请在支持 WebGL 的桌面环境中运行</div>';
       container.appendChild(fallbackDiv);
     }
@@ -46,46 +46,37 @@ export const PreviewPanel: React.FC = () => {
       if (fallbackDiv) {
         container.removeChild(fallbackDiv);
       } else {
-        const preview = getPreview();
         preview.unmount();
       }
     };
-  }, []);
+  }, [effectType]);
 
   // Update config when effect changes
   useEffect(() => {
     if (config) {
-      const preview = getPreview();
       preview.setConfig(config);
     }
-  }, [config]);
+  }, [config, effectType]);
 
   // Sync play/pause
   useEffect(() => {
-    const preview = getPreview();
-    if (previewPlaying) {
-      preview.play();
-    } else {
-      preview.pause();
-    }
-  }, [previewPlaying]);
+    if (previewPlaying) preview.play();
+    else preview.pause();
+  }, [previewPlaying, effectType]);
 
-  // Mouse events for camera
+  // Mouse events
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    getPreview().onMouseDown(e.clientX, e.clientY);
-  }, []);
-
+    if ('onMouseDown' in preview) (preview as ParticlePreview).onMouseDown(e.clientX, e.clientY);
+  }, [effectType]);
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    getPreview().onMouseMove(e.clientX, e.clientY);
-  }, []);
-
+    if ('onMouseMove' in preview) (preview as ParticlePreview).onMouseMove(e.clientX, e.clientY);
+  }, [effectType]);
   const handleMouseUp = useCallback(() => {
-    getPreview().onMouseUp();
-  }, []);
-
+    if ('onMouseUp' in preview) (preview as ParticlePreview).onMouseUp();
+  }, [effectType]);
   const handleWheel = useCallback((e: React.WheelEvent) => {
-    getPreview().onWheel(e.deltaY);
-  }, []);
+    if ('onWheel' in preview) (preview as ParticlePreview).onWheel(e.deltaY);
+  }, [effectType]);
 
   // Keyboard
   useEffect(() => {
@@ -101,67 +92,28 @@ export const PreviewPanel: React.FC = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* Controls */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        padding: '6px 12px',
-        borderBottom: '1px solid var(--border-color)',
-        background: 'var(--bg-secondary)'
-      }}>
-        <button
-          onClick={() => setPreviewPlaying(!previewPlaying)}
-          title={previewPlaying ? '暂停' : '播放'}
-        >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderBottom: '1px solid var(--border-color)', background: 'var(--bg-secondary)' }}>
+        <button onClick={() => setPreviewPlaying(!previewPlaying)} title={previewPlaying ? '暂停' : '播放'}>
           {previewPlaying ? '⏸ 暂停' : '▶ 播放'}
         </button>
-        <button
-          onClick={() => {
-            const preview = getPreview();
-            preview.reset();
-            setPreviewPlaying(true);
-          }}
-          title="重置"
-        >
+        <button onClick={() => { preview.reset(); setPreviewPlaying(true); }} title="重置">
           ↺ 重置
         </button>
         <span style={{ fontSize: 12, color: 'var(--text-secondary)', flex: 1 }}>
-          🎬 {useAppStore.getState().effectType === 'particle2d' ? '2D 粒子预览' : '3D 粒子预览'} {previewPlaying ? '🟢' : '⏸'}
+          🎬 {effectType === 'particle2d' ? '2D 粒子预览' : '3D 粒子预览'} {previewPlaying ? '🟢' : '⏸'}
         </span>
-        <select
-          onChange={(e) => {
-            const bg = e.target.value;
-            const preview = getPreview();
-            // Access scene background - use a simpler approach
-            const colors: Record<string, string> = {
-              dark: '#0d1117', light: '#e6edf3', custom: '#1a1a2e', transparent: 'transparent'
-            };
-            document.querySelector('canvas')?.parentElement?.style.setProperty('background', colors[bg] || '#0d1117');
-          }}
-          style={{ fontSize: 11, padding: '2px 6px', width: 90 }}
-        >
+        <select onChange={(e) => {
+          const colors: Record<string,string> = { dark:'#0d1117', light:'#e6edf3', custom:'#1a1a2e', transparent:'transparent' };
+          document.querySelector('canvas')?.parentElement?.style.setProperty('background', colors[e.target.value] || '#0d1117');
+        }} style={{ fontSize: 11, padding: '2px 6px', width: 90 }}>
           <option value="dark">深色背景</option>
           <option value="light">浅色背景</option>
           <option value="custom">深蓝背景</option>
           <option value="transparent">透明背景</option>
         </select>
       </div>
-
-      {/* Canvas */}
-      <div
-        ref={containerRef}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        onWheel={handleWheel}
-        style={{
-          flex: 1,
-          cursor: 'grab',
-          minHeight: 0
-        }}
-      />
+      <div ref={containerRef} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp} onWheel={handleWheel}
+        style={{ flex: 1, cursor: 'grab', minHeight: 0 }} />
     </div>
   );
 };

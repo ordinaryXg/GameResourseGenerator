@@ -1,0 +1,16 @@
+export { generateEffect, buildSystemPrompt } from './ai-engine';
+export type { AIEngineResult } from './ai-engine';
+export { matchTemplate, ALL_TEMPLATES } from '@/data/template-data';
+export type { PresetTemplate } from '@/data/template-data';
+export { getDefaultEffectConfig, getDefaultParticle3DConfig, generateId, generateUUID } from './effect-defaults';
+export { generatePrefab, exportToCocosProject } from './export-pipeline';
+export { generatePlist, generateEffectFile, generateAnimationClip } from './export-formats';
+export { ParticlePreview } from './particle-preview';
+export { Particle2DPreview } from './particle2d-preview';
+export { BaseParticlePreview } from './base-particle-preview';
+export { parsePrefab } from './prefab-importer';
+export type { ImportResult } from './prefab-importer';
+export { getCompatibilityReport, exportToEngine } from './multi-engine-export';
+export type { TargetEngine } from './multi-engine-export';
+export { i18n } from './i18n';
+export type { Lang, I18nDict } from './i18n';

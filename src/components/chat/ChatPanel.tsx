@@ -2,25 +2,20 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useAppStore } from '@/stores/app-store';
+import { useSessionStore } from '@/stores/session-store';
 import { generateId } from '@/utils/effect-defaults';
 import { generateEffect, buildSystemPrompt } from '@/utils/ai-engine';
 import type { ChatMessage } from '@/types/effect';
 
 export const ChatPanel: React.FC = () => {
   const {
-    messages,
-    isStreaming,
-    streamingContent,
-    appMode,
-    currentEffect,
-    aiSettings,
-    addMessage,
-    setIsStreaming,
-    setStreamingContent,
-    appendStreamingContent,
-    setCurrentEffect,
-    showToastMessage
+    isStreaming, streamingContent, appMode, aiSettings,
+    setIsStreaming, setStreamingContent, appendStreamingContent, showToastMessage
   } = useAppStore();
+
+  const {
+    messages, currentEffect, addMessage, setCurrentEffect
+  } = useSessionStore();
 
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);

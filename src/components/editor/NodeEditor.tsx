@@ -10,7 +10,7 @@ import {
   useEdgesState
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { useAppStore } from '@/stores/app-store';
+import { useSessionStore } from '@/stores/session-store';
 import type { Particle3DConfig } from '@/types/effect';
 
 const MODULE_DEFS = [
@@ -64,7 +64,7 @@ function getInitialEdges(): Edge[] {
 }
 
 export const NodeEditor: React.FC = () => {
-  const { currentEffect } = useAppStore();
+  const { currentEffect } = useSessionStore();
   const config = currentEffect?.config as Particle3DConfig | undefined;
 
   const initialNodes = useMemo(() => getInitialNodes(config || null), [config]);
