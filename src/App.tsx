@@ -7,6 +7,7 @@ import { PreviewPanel } from '@/components/preview/PreviewPanel';
 import { TemplateLibrary } from '@/components/templates/TemplateLibrary';
 import { SessionsPanel } from '@/components/layout/SessionsPanel';
 import { ShaderEditor } from '@/components/editor/ShaderEditor';
+import { AnimationEditor } from '@/components/editor/AnimationEditor';
 import { SettingsModal } from '@/components/layout/SettingsModal';
 import { ExportModal } from '@/components/layout/ExportModal';
 import { getDefaultEffectConfig, generateId } from '@/utils/effect-defaults';
@@ -153,7 +154,7 @@ const App: React.FC = () => {
           <option value="particle3d">3D 粒子</option>
           <option value="particle2d">2D 粒子</option>
           <option value="shader">Shader</option>
-          <option value="animation" disabled>动画</option>
+          <option value="animation">动画</option>
         </select>
         <button
           onClick={() => setPreviewVisible(!previewVisible)}
@@ -238,7 +239,7 @@ const App: React.FC = () => {
         {/* Center: Node Editor + Preview */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <div style={{ flex: 1, overflow: 'hidden' }}>
-            {effectType === 'shader' ? <ShaderEditor /> : <NodeEditor />}
+            {effectType === 'shader' ? <ShaderEditor /> : effectType === 'animation' ? <AnimationEditor /> : <NodeEditor />}
           </div>
           {previewVisible && (
             <div style={{ height: 280, borderTop: '1px solid var(--border-color)', flexShrink: 0 }}>

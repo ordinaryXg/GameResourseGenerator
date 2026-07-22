@@ -1,12 +1,51 @@
 import React, { useState, useCallback } from 'react';
 import { useAppStore } from '@/stores/app-store';
 import { exportToCocosProject } from '@/utils/export-pipeline';
+import { getCompatibilityReport, exportToEngine } from '@/utils/multi-engine-export';
+import type { TargetEngine } from '@/utils/multi-engine-export';
+import type { Particle3DConfig } from '@/types/effect';
+
+const ENGINE_OPTIONS: { value: TargetEngine; label: string }[] = [
+  { value: 'cocos', label: 'Cocos Creator 3.8' },
+  { value: 'unity', label: 'Unity 2022+' },
+  { value: 'godot', label: 'Godot 4.x' },
+];
 
 export const ExportModal: React.FC = () => {
   const { currentEffect, cocosProjectPath, setCocosProjectPath, setExportOpen, showToastMessage } = useAppStore();
   const [projectPath, setProjectPath] = useState(cocosProjectPath);
   const [exporting, setExporting] = useState(false);
+  const [targetEngine, setTargetEngine] = useState<TargetEngine>('cocos');
   const [result, setResult] = useState<{ success: boolean; paths: string[]; error?: string } | null>(null);
+
+  const compatibility = currentEffect && targetEngine !== 'cocos'
+    ? getCompatibilityReport(currentEffect.config as Particle3DConfig, targetEngine)
+    : [];
+
+  const handleExport = useCallback(async () => {
+    if (!currentEffect) return;
+    setExporting(true);
+    setResult(null);
+
+    if (targetEngine === 'cocos') {
+      const res = await exportToCocosProject(currentEffect, projectPath || '');
+      setResult(res);
+      if (res.success) showToastMessage(`导出成功！${res.paths.length} 个文件`);
+    } else {
+      const exp = exportToEngine(currentEffect.config as Particle3DConfig, currentEffect.name, targetEngine);
+      const blob = new Blob([exp.content], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = exp.filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      setResult({ success: true, paths: [exp.filename] });
+      showToastMessage(`${exp.filename} 导出成功`);
+    }
+
+    setExporting(false);
+  }, [currentEffect, targetEngine, projectPath, showToastMessage]);
 
   const handleSelectPath = useCallback(async () => {
     if (window.electronAPI) {
@@ -25,21 +64,6 @@ export const ExportModal: React.FC = () => {
     }
   }, [setCocosProjectPath]);
 
-  const handleExport = useCallback(async () => {
-    if (!currentEffect || !projectPath) return;
-
-    setExporting(true);
-    setResult(null);
-
-    const res = await exportToCocosProject(currentEffect, projectPath);
-    setResult(res);
-    setExporting(false);
-
-    if (res.success) {
-      showToastMessage(`导出成功！${res.paths.length} 个文件`);
-    }
-  }, [currentEffect, projectPath, showToastMessage]);
-
   if (!currentEffect) return null;
 
   return (
@@ -57,6 +81,36 @@ export const ExportModal: React.FC = () => {
           <div>{currentEffect.type === 'particle3d' ? '3D 粒子' : currentEffect.type}</div>
         </div>
 
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>目标引擎</div>
+          <select
+            value={targetEngine}
+            onChange={(e) => setTargetEngine(e.target.value as TargetEngine)}
+            style={{ width: '100%' }}
+          >
+            {ENGINE_OPTIONS.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {compatibility.length > 0 && (
+          <div style={{
+            marginBottom: 16, padding: 12, background: 'var(--bg-tertiary)',
+            borderRadius: 'var(--radius-md)', fontSize: 12
+          }}>
+            <div style={{ fontWeight: 600, marginBottom: 8 }}>兼容性报告</div>
+            {compatibility.map((item, i) => (
+              <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 4, alignItems: 'center' }}>
+                <span>{item.status === 'full' ? '✅' : item.status === 'partial' ? '⚠️' : '❌'}</span>
+                <span style={{ flex: 1 }}>{item.module}</span>
+                <span style={{ color: 'var(--text-secondary)', fontSize: 11 }}>{item.note}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {targetEngine === 'cocos' && (<>
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Cocos Creator 项目路径</div>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -80,6 +134,7 @@ export const ExportModal: React.FC = () => {
             </div>
           )}
         </div>
+        </>)}
 
         <div style={{ marginBottom: 16 }}>
           <button

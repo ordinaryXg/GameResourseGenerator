@@ -10,6 +10,7 @@ import type {
 import { getDefaultEffectConfig, generateUUID } from '@/utils/effect-defaults';
 
 export type AppMode = 'demo' | 'llm';
+export type Lang = 'zh' | 'en';
 
 export interface Session {
   id: string;
@@ -49,6 +50,7 @@ interface AppState {
   exportOpen: boolean;
   templateLibraryOpen: boolean;
   showToast: string | null;
+  lang: Lang;
 
   // Actions
   setAISettings: (settings: Partial<AISettings>) => void;
@@ -70,6 +72,7 @@ interface AppState {
   setTemplateLibraryOpen: (v: boolean) => void;
   showToastMessage: (msg: string) => void;
   resetEffect: () => void;
+  setLang: (lang: Lang) => void;
 
   // Session actions
   createSession: (name?: string) => string;
@@ -120,6 +123,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   exportOpen: false,
   templateLibraryOpen: false,
   showToast: null,
+  lang: 'zh',
+
+  setLang: (lang) => set({ lang }),
 
   setAISettings: (settings) =>
     set((s) => ({

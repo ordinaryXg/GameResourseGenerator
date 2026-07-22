@@ -107,6 +107,19 @@ export const SettingsModal: React.FC = () => {
           />
         </div>
 
+        {/* Language */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 6 }}>语言 / Language</label>
+          <select
+            value={useAppStore.getState().lang}
+            onChange={(e) => useAppStore.getState().setLang(e.target.value as 'zh' | 'en')}
+            style={{ width: '100%' }}
+          >
+            <option value="zh">中文</option>
+            <option value="en">English</option>
+          </select>
+        </div>
+
         <div className="modal-actions">
           <button onClick={() => setSettingsOpen(false)}>取消</button>
           <button className="primary" onClick={handleSave}>保存</button>
