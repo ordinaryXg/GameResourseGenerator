@@ -6,6 +6,8 @@
 | [DEVELOPMENT-PLAN-v2.md](./DEVELOPMENT-PLAN-v2.md) | **开发步骤表（Phase 0–10、任务状态、PR 切分、发布门禁）** |
 | [E2E-SMOKE.md](./E2E-SMOKE.md) | v2.0 E2E 冒烟测试清单 |
 | [RELEASE-GATE.md](./RELEASE-GATE.md) | v2.0 发布门禁（10 项 + 非功能） |
+| [USER-GUIDE.md](./USER-GUIDE.md) | **v2.0 用户指南** |
+| [MIGRATION-v1.md](./MIGRATION-v1.md) | v1 Session → v2 项目迁移 |
 | [PRD.md](./PRD.md) | v1.x 产品需求文档（当前已实现功能） |
 | [PRD-v2.md](./PRD-v2.md) | **v2.0 产品需求文档（组合特效 + 资产系统 + 编辑器优先）** |
 

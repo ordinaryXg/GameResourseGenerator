@@ -37,7 +37,8 @@ export const AssetBrowserPanel: React.FC<AssetBrowserPanelProps> = ({
   const inspectorTarget = useAppStore(s => s.inspectorTarget);
   const selectAssetForInspector = useAppStore(s => s.selectAssetForInspector);
   const clearInspectorTarget = useAppStore(s => s.clearInspectorTarget);
-  const { showToastMessage } = useAppStore();
+  const showToastMessage = useAppStore(s => s.showToastMessage);
+  const setEmitterTemplatesOpen = useAppStore(s => s.setEmitterTemplatesOpen);
   const gridRef = useRef<HTMLDivElement>(null);
 
   const selectedAssetId = inspectorTarget?.kind === 'asset' ? inspectorTarget.assetId : null;
@@ -131,6 +132,14 @@ export const AssetBrowserPanel: React.FC<AssetBrowserPanelProps> = ({
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       <div className="panel-header asset-browser-header">
         <span style={{ fontWeight: 600, fontSize: 12 }}>资产</span>
+        <button
+          type="button"
+          className="btn-sm"
+          title="将内置模板应用到当前选中的发射器"
+          onClick={() => setEmitterTemplatesOpen(true)}
+        >
+          模板
+        </button>
         <div style={{ flex: 1, minWidth: 0 }} />
         <label className="asset-source-check">
           <input

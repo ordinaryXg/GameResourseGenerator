@@ -41,7 +41,7 @@ export function useKeyboardShortcuts(handlers: Record<string, ShortcutHandler>) 
 
 export function useAppShortcuts() {
   const {
-    setSettingsOpen, setExportOpen, setTemplateLibraryOpen,
+    setSettingsOpen, setExportOpen, setPresetProjectsOpen, setEmitterTemplatesOpen,
     setPreviewPlaying, previewPlaying, showToastMessage, clearInspectorTarget
   } = useAppStore();
   const undo = useProjectStore(s => s.undo);
@@ -70,14 +70,15 @@ export function useAppShortcuts() {
     },
     'Cmd+E': () => setExportOpen(true),
     'Cmd+,': () => setSettingsOpen(true),
-    'Cmd+T': () => setTemplateLibraryOpen(true),
+    'Cmd+T': () => setPresetProjectsOpen(true),
     'SPACE': () => setPreviewPlaying(!previewPlaying),
     'ESCAPE': () => {
       const state = useAppStore.getState();
-      if (state.settingsOpen || state.exportOpen || state.templateLibraryOpen) {
+      if (state.settingsOpen || state.exportOpen || state.presetProjectsOpen || state.emitterTemplatesOpen) {
         setSettingsOpen(false);
         setExportOpen(false);
-        setTemplateLibraryOpen(false);
+        setPresetProjectsOpen(false);
+        setEmitterTemplatesOpen(false);
         return;
       }
       if (state.inspectorTarget || !state.inspectorSuppressFallback) {
@@ -87,7 +88,7 @@ export function useAppShortcuts() {
     }
   }), [
     canUndoNow, canRedoNow, undo, redo, showToastMessage,
-    setExportOpen, setSettingsOpen, setTemplateLibraryOpen,
+    setExportOpen, setSettingsOpen, setPresetProjectsOpen, setEmitterTemplatesOpen,
     setPreviewPlaying, previewPlaying, clearInspectorTarget
   ]);
 

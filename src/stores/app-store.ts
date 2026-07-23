@@ -58,7 +58,8 @@ interface AppState {
   panelSizes: PanelSizes;
   settingsOpen: boolean;
   exportOpen: boolean;
-  templateLibraryOpen: boolean;
+  emitterTemplatesOpen: boolean;
+  presetProjectsOpen: boolean;
   showToast: string | null;
   lang: Lang;
   newEffectModalOpen: boolean;
@@ -86,7 +87,8 @@ interface AppState {
   setPanelSize: (key: keyof PanelSizes, value: number) => void;
   setSettingsOpen: (v: boolean) => void;
   setExportOpen: (v: boolean) => void;
-  setTemplateLibraryOpen: (v: boolean) => void;
+  setEmitterTemplatesOpen: (v: boolean) => void;
+  setPresetProjectsOpen: (v: boolean) => void;
   showToastMessage: (msg: string) => void;
   setLang: (l: Lang) => void;
   setNewEffectModalOpen: (v: boolean) => void;
@@ -116,7 +118,8 @@ export const useAppStore = create<AppState>((set) => ({
   panelSizes: loadPanelSizes(),
   settingsOpen: false,
   exportOpen: false,
-  templateLibraryOpen: false,
+  emitterTemplatesOpen: false,
+  presetProjectsOpen: false,
   showToast: null,
   lang: 'zh',
   newEffectModalOpen: false,
@@ -159,7 +162,8 @@ export const useAppStore = create<AppState>((set) => ({
   }),
   setSettingsOpen: (v) => set({ settingsOpen: v }),
   setExportOpen: (v) => set({ exportOpen: v }),
-  setTemplateLibraryOpen: (v) => set({ templateLibraryOpen: v }),
+  setEmitterTemplatesOpen: (v) => set({ emitterTemplatesOpen: v }),
+  setPresetProjectsOpen: (v) => set({ presetProjectsOpen: v }),
   showToastMessage: (msg) => { set({ showToast: msg }); setTimeout(() => set({ showToast: null }), 3000); },
   setLang: (l) => set({ lang: l }),
   setNewEffectModalOpen: (v) => set({ newEffectModalOpen: v }),

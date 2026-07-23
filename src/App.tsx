@@ -10,7 +10,8 @@ import { NodeEditor } from '@/components/editor/NodeEditor';
 import { PropertiesPanel } from '@/components/properties/PropertiesPanel';
 import { resolveInspectorTarget } from '@/utils/inspector-target';
 import { PreviewPanel } from '@/components/preview/PreviewPanel';
-import { TemplateLibrary } from '@/components/templates/TemplateLibrary';
+import { PresetProjectsModal } from '@/components/layout/PresetProjectsModal';
+import { EmitterTemplatesModal } from '@/components/layout/EmitterTemplatesModal';
 import { HierarchyPanel } from '@/components/hierarchy/HierarchyPanel';
 import { AssetBrowserPanel } from '@/components/assets/AssetBrowserPanel';
 import { ProjectWelcome } from '@/components/layout/ProjectWelcome';
@@ -25,12 +26,12 @@ import { useAppShortcuts } from '@/hooks/useKeyboardShortcuts';
 
 const App: React.FC = () => {
   const {
-    effectType, appMode, previewVisible, templateLibraryOpen,
+    effectType, appMode, previewVisible,
     settingsOpen, exportOpen, showToast, isStreaming, activePanel,
-    panelSizes, aiSettings, setEffectType, setPreviewVisible, setTemplateLibraryOpen,
+    panelSizes, aiSettings, setEffectType, setPreviewVisible,
     setSettingsOpen, setExportOpen, setActivePanel, adjustPanelSize, showToastMessage,
     aiPanelVisible, setAiPanelVisible, assetBrowserVisible, setAssetBrowserVisible,
-    inspectorTarget, inspectorSuppressFallback
+    inspectorTarget, inspectorSuppressFallback, setPresetProjectsOpen
   } = useAppStore();
 
   const {
@@ -163,10 +164,6 @@ const App: React.FC = () => {
   const resizePreview = useCallback((d: number) => adjustPanelSize('preview', -d), [adjustPanelSize]);
   const resizeAssets = useCallback((d: number) => adjustPanelSize('assets', -d), [adjustPanelSize]);
 
-  if (templateLibraryOpen) {
-    return <TemplateLibrary />;
-  }
-
   if (!isLoaded || (showWelcome && !project)) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
@@ -213,7 +210,7 @@ const App: React.FC = () => {
         <div className="toolbar-divider" />
 
         <button className="btn-sm" onClick={handleImportClick} title="导入 .prefab 到当前发射器">导入 Prefab</button>
-        <button className="btn-sm" onClick={() => setTemplateLibraryOpen(true)} title="模板库">模板库</button>
+        <button className="btn-sm" onClick={() => setPresetProjectsOpen(true)} title="打开多发射器组合预设">组合预设</button>
         <button className="btn-sm" onClick={openAssetImport} title="导入 PNG 贴图到项目">导入贴图</button>
         <input
           ref={assetInputRef}
@@ -402,6 +399,8 @@ const App: React.FC = () => {
 
       {settingsOpen && <SettingsModal />}
       {exportOpen && <ExportModal />}
+      <PresetProjectsModal />
+      <EmitterTemplatesModal />
 
       {showToast && <div className="toast">{showToast}</div>}
     </>

@@ -2,48 +2,49 @@
 
 **最好用的游戏特效制作软件** — 在独立编辑器中创作、预览、组合粒子特效，并导出为可在 **Cocos Creator / Unity / Unreal** 中直接使用的资源。
 
+> **v2.0** 以 `.fxproj` 项目为核心：多发射器层级树、资产注册表、Undo/Redo、内置资产库与 Cocos 多节点 Prefab 导出。
+
 ## 愿景
 
-- 编辑体验对标 Unity Particle System，做业内最好用的特效工具
-- 一次制作，多引擎导出：Cocos（已支持）、Unity、Unreal（路线图）
-- AI 作为可选辅助，加速从创意到可用资源的链路
+- 编辑体验对标 Unity Particle System
+- 一次制作，多引擎导出：Cocos Creator 3.8（已支持）、Unity / Unreal（路线图）
+- AI 为可选辅助，须选中发射器后才生效
 
-## 功能
+## 核心功能（v2.0）
 
-- 🤖 **AI 自然语言生成** — 输入描述即可生成粒子特效（支持 Demo 模式 + LLM 模式）
-- 🎬 **3D 实时预览** — Three.js WebGL 粒子渲染，支持播放/暂停/重置
-- 📋 **属性检查器** — 9 个模块完整参数编辑
-- 📐 **节点编辑器** — React Flow 可视化模块节点
-- 📁 **模板库** — 15 个内置模板，4 个分类
-- 📤 **多引擎导出** — Cocos Creator 3.8 `.prefab`（已支持）；Unity / Unreal（规划中）
-- 📥 **.prefab 导入** — 支持工具栏导入 + 拖拽导入
-- 🎨 **Shader 编辑器** — CodeMirror 6 + GLSL 语法高亮
-- 🖼 **2D 粒子系统** — 正交投影预览
-- 💬 **多会话管理** — 新建/切换/复制/删除会话
+| 能力 | 说明 |
+|------|------|
+| 层级树 | 组 / 发射器 / 模块；拖拽 reparent；Solo / Hide |
+| 组合预设 | 爆炸、魔法等多发射器项目模板 |
+| 资产浏览器 | 内置贴图 / 材质 / Mesh + 项目导入资产 |
+| 属性面板 | 节点 Transform + 11 粒子模块 + 资产引用槽 |
+| 实时预览 | 多发射器 WebGL 合成预览 |
+| 导出 | Cocos Creator 3.8 多 ParticleSystem Prefab + 资产打包 |
+| 导入 | `.prefab` 解析 + `.fxproj` 项目文件 |
+| v1 迁移 | 自动将 localStorage Session 转为 v2 项目 |
+| AI 助手 | Demo / LLM；仅更新当前选中发射器 |
 
 ## 技术栈
 
 - Electron 32 + React 18 + TypeScript 5
-- Three.js 0.169 (WebGL 粒子渲染)
-- Zustand 5 (状态管理)
-- @xyflow/react 12 (节点编辑器)
-- CodeMirror 6 (Shader 编辑器)
-- Vite 5 (构建工具)
+- Three.js 0.169 · Zustand 5 · @xyflow/react 12 · CodeMirror 6 · Vite 5
 
 ## 快速开始
 
 ```bash
-# 安装依赖
 npm install
 
-# 开发模式（Web 预览）
+# Web 开发
 npm run dev
 
-# 生产构建
+# 类型检查 + 生产构建
 npm run build
 
-# 预览
-npm run preview
+# 单元测试（88+ 项）
+npm test
+
+# Electron 安装包（Windows）
+npm run electron:build
 ```
 
 ## 项目结构
@@ -51,23 +52,42 @@ npm run preview
 ```
 src/
 ├── components/
-│   ├── chat/ChatPanel.tsx         # AI 对话面板
-│   ├── editor/NodeEditor.tsx      # React Flow 节点编辑器
-│   ├── editor/ShaderEditor.tsx    # Shader 编辑器
-│   ├── inspector/InspectorPanel.tsx # 属性检查器
-│   ├── preview/PreviewPanel.tsx   # 3D/2D 预览面板
-│   ├── templates/TemplateLibrary.tsx # 模板库
-│   ├── layout/SessionsPanel.tsx   # 多会话管理
-│   ├── layout/SettingsModal.tsx   # 设置弹窗
-│   └── layout/ExportModal.tsx     # 导出弹窗
-├── stores/app-store.ts            # Zustand 状态管理
-├── types/effect.ts                # 完整类型定义
+│   ├── hierarchy/HierarchyPanel.tsx    # 层级树
+│   ├── assets/AssetBrowserPanel.tsx    # 资产浏览器
+│   ├── properties/PropertiesPanel.tsx  # 全局属性面板
+│   ├── layout/PresetProjectsModal.tsx  # 组合预设
+│   ├── layout/EmitterTemplatesModal.tsx # 单发射器模板
+│   └── layout/ProjectWelcome.tsx       # 启动 / 迁移
+├── stores/
+│   ├── project-store.ts                # .fxproj 项目状态
+│   └── asset-store.ts                  # 资产注册表
 ├── utils/
-│   ├── ai-engine.ts               # AI 引擎 + 模板数据
-│   ├── particle-preview.ts        # 3D 粒子预览引擎
-│   ├── particle2d-preview.ts      # 2D 粒子预览引擎
-│   ├── export-pipeline.ts         # .prefab 导出管线
-│   ├── prefab-importer.ts         # .prefab 导入解析器
-│   └── effect-defaults.ts         # 默认配置生成器
-└── styles/global.css              # 全局样式
+│   ├── project-io.ts                   # 序列化
+│   ├── export-pipeline.ts              # Cocos 导出
+│   └── migrate-v1.ts                   # v1 迁移
+└── data/preset-projects.ts             # 组合预设数据
 ```
+
+## 文档
+
+| 文档 | 说明 |
+|------|------|
+| [docs/USER-GUIDE.md](docs/USER-GUIDE.md) | 用户指南 |
+| [docs/MIGRATION-v1.md](docs/MIGRATION-v1.md) | v1 → v2 迁移 |
+| [docs/DEVELOPMENT-PLAN-v2.md](docs/DEVELOPMENT-PLAN-v2.md) | 开发步骤表 |
+| [docs/RELEASE-GATE.md](docs/RELEASE-GATE.md) | v2.0 发布门禁 |
+| [docs/E2E-SMOKE.md](docs/E2E-SMOKE.md) | E2E 冒烟清单 |
+
+## 快捷键
+
+| 快捷键 | 功能 |
+|--------|------|
+| Ctrl+Z / Ctrl+Y | 撤销 / 重做 |
+| Ctrl+S | 保存（Electron） |
+| Ctrl+E | 导出 |
+| Ctrl+T | 组合预设 |
+| Space | 播放 / 暂停预览 |
+
+## 许可证
+
+ISC
