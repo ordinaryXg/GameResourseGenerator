@@ -1,34 +1,37 @@
 import { useCallback, useRef, useState } from 'react';
 import { useAppStore } from '@/stores/app-store';
 import { useProjectStore } from '@/stores/project-store';
-import { parsePrefab } from '@/utils/prefab-importer';
+import { parsePrefabToProject } from '@/utils/prefab-importer';
 import { generateId } from '@/utils/effect-defaults';
+import { getEmitterNodes } from '@/utils/preview-sources';
 
 export function usePrefabImport() {
   const { showToastMessage } = useAppStore();
-  const { setCurrentEffect, addMessage } = useProjectStore();
+  const { loadProjectData, addMessage } = useProjectStore();
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImportFile = useCallback(async (file: File) => {
     try {
       const text = await file.text();
-      const result = parsePrefab(text);
-      setCurrentEffect(result.effectConfig);
+      const result = parsePrefabToProject(text, file.name.replace(/\.prefab$/i, ''));
+      loadProjectData(result.project);
+      const emitterCount = getEmitterNodes(result.project.root).length;
       addMessage({
         id: generateId(),
         role: 'system',
-        content: `已导入：**${result.effectConfig.name}**${result.warnings.length > 0 ? `\n\n⚠ ${result.warnings.join('\n')}` : ''}`,
+        content: `已导入项目：**${result.project.name}**（${emitterCount} 个发射器）${result.warnings.length > 0 ? `\n\n⚠ ${result.warnings.join('\n')}` : ''}`,
         timestamp: Date.now()
       });
-      showToastMessage(`导入成功：${result.effectConfig.name}`);
+      showToastMessage(`导入成功：${result.project.name}`);
       if (result.warnings.length > 0) {
         setTimeout(() => showToastMessage(result.warnings[0]), 2000);
       }
-    } catch (err: any) {
-      showToastMessage(`导入失败：${err.message}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : '未知错误';
+      showToastMessage(`导入失败：${msg}`);
     }
-  }, [setCurrentEffect, addMessage, showToastMessage]);
+  }, [loadProjectData, addMessage, showToastMessage]);
 
   const handleImportClick = useCallback(() => {
     fileInputRef.current?.click();
@@ -64,4 +67,4 @@ export function usePrefabImport() {
   }, [handleImportFile, showToastMessage]);
 
   return { isDragOver, fileInputRef, handleImportClick, handleFileChange, handleDragOver, handleDragLeave, handleDrop };
-}
+};

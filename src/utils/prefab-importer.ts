@@ -13,6 +13,7 @@ import {
   DEFAULT_TEXTURE_ASSET_ID,
   DEFAULT_MATERIAL_ASSET_ID
 } from './project-factory';
+import { ImportAssetCollector, extractParticleAssetUuids } from './import-asset-resolver';
 
 export interface ImportResult {
   effectConfig: EffectConfig;
@@ -236,7 +237,7 @@ function findParticleSystemOnNode(
   return null;
 }
 
-function parseNodeTree(pool: unknown[], nodeIdx: number): EffectNode {
+function parseNodeTree(pool: unknown[], nodeIdx: number, assets: ImportAssetCollector): EffectNode {
   const node = pool[nodeIdx] as Record<string, unknown>;
   if (!node || node.__type__ !== 'cc.Node') {
     throw new Error('无效的节点结构');
@@ -248,6 +249,9 @@ function parseNodeTree(pool: unknown[], nodeIdx: number): EffectNode {
   const ps = findParticleSystemOnNode(pool, node);
 
   if (ps) {
+    const { materialUuid, spriteFrameUuid } = extractParticleAssetUuids(pool, ps);
+    const mainTexture = assets.resolveTextureRef(spriteFrameUuid) ?? DEFAULT_TEXTURE_ASSET_ID;
+    const material = assets.resolveMaterialRef(materialUuid) ?? DEFAULT_MATERIAL_ASSET_ID;
     const emitter: ParticleEmitterNode = {
       type: 'emitter',
       id: generateUUID(),
@@ -255,10 +259,7 @@ function parseNodeTree(pool: unknown[], nodeIdx: number): EffectNode {
       enabled,
       transform,
       config: parseParticleSystemConfig(pool, ps),
-      assetRefs: {
-        mainTexture: DEFAULT_TEXTURE_ASSET_ID,
-        material: DEFAULT_MATERIAL_ASSET_ID
-      }
+      assetRefs: { mainTexture, material }
     };
     return emitter;
   }
@@ -269,7 +270,7 @@ function parseNodeTree(pool: unknown[], nodeIdx: number): EffectNode {
     for (const childRef of childRefs) {
       const childIdx = (childRef as { __id__?: number }).__id__;
       if (typeof childIdx === 'number') {
-        children.push(parseNodeTree(pool, childIdx));
+        children.push(parseNodeTree(pool, childIdx, assets));
       }
     }
   }
@@ -314,16 +315,18 @@ export function parsePrefabToProject(jsonString: string, projectName?: string): 
     throw new Error('该预制体不包含粒子系统组件（cc.ParticleSystem）');
   }
 
-  const parsedRoot = parseNodeTree(prefabArray, rootIdx);
+  const assetCollector = new ImportAssetCollector();
+  const parsedRoot = parseNodeTree(prefabArray, rootIdx, assetCollector);
   const name = projectName ?? prefab?._name ?? '导入特效';
   const now = new Date().toISOString();
+  const importedAssets = assetCollector.getImportedAssets();
 
   const project: EffectProject = {
     version: FX_PROJECT_VERSION,
     id: generateUUID(),
     name,
     settings: { targetEngine: 'cocos-creator-3.8' },
-    assetRegistry: createBuiltinAssetRegistry(),
+    assetRegistry: [...createBuiltinAssetRegistry(), ...importedAssets],
     root: normalizeProjectRoot(parsedRoot),
     metadata: {
       createdAt: now,
@@ -332,7 +335,7 @@ export function parsePrefabToProject(jsonString: string, projectName?: string): 
     }
   };
 
-  return { project, unsupportedModules: [], warnings: [] };
+  return { project, unsupportedModules: [], warnings: importedAssets.length > 0 ? [`已导入 ${importedAssets.length} 个外部资产引用`] : [] };
 }
 
 export function parsePrefab(jsonString: string): ImportResult {

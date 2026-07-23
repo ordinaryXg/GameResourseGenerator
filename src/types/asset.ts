@@ -13,6 +13,7 @@ export interface AssetEntry {
     width?: number;
     height?: number;
     uuid?: string;
+    spriteFrameUuid?: string;
     cocosMeta?: string;
     shape?: string;
     textureId?: string;
