@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '@/stores/app-store';
 import { useProjectStore } from '@/stores/project-store';
+import { findNodeById } from '@/utils/project-tree';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { NodeEditor } from '@/components/editor/NodeEditor';
 import { InspectorPanel } from '@/components/inspector/InspectorPanel';
@@ -26,9 +27,13 @@ const App: React.FC = () => {
   } = useAppStore();
 
   const {
-    project, currentEffect, isLoaded, isDirty, projectPath,
-    newProject, saveProject, saveProjectAs, closeProject, syncAutosave
+    project, currentEffect, isLoaded, isDirty, projectPath, selectedNodeId,
+    newProject, saveProject, saveProjectAs, closeProject, syncAutosave,
+    undo, redo, undoStack, redoStack
   } = useProjectStore();
+
+  const canUndoNow = undoStack.length > 0;
+  const canRedoNow = redoStack.length > 0;
 
   const [showWelcome, setShowWelcome] = useState(true);
 
@@ -79,6 +84,26 @@ const App: React.FC = () => {
     setShowWelcome(true);
   }, [closeProject]);
 
+  const selectedNodeName = useMemo(() => {
+    if (!project || !selectedNodeId) return '无';
+    const node = findNodeById(project.root, selectedNodeId);
+    return node?.name ?? '无';
+  }, [project, selectedNodeId]);
+
+  const handleUndo = useCallback(() => {
+    if (canUndoNow) {
+      undo();
+      showToastMessage('已撤销');
+    }
+  }, [canUndoNow, undo, showToastMessage]);
+
+  const handleRedo = useCallback(() => {
+    if (canRedoNow) {
+      redo();
+      showToastMessage('已重做');
+    }
+  }, [canRedoNow, redo, showToastMessage]);
+
   const resizeLeft = useCallback((d: number) => adjustPanelSize('left', d), [adjustPanelSize]);
   const resizeRight = useCallback((d: number) => adjustPanelSize('right', -d), [adjustPanelSize]);
   const resizePreview = useCallback((d: number) => adjustPanelSize('preview', -d), [adjustPanelSize]);
@@ -110,6 +135,28 @@ const App: React.FC = () => {
         <button className="btn-sm" onClick={handleSave} disabled={!project} title="保存项目">
           保存{isDirty ? '*' : ''}
         </button>
+
+        <div className="toolbar-divider" />
+
+        <button
+          className="btn-sm"
+          onClick={handleUndo}
+          disabled={!canUndoNow}
+          title="撤销 (Ctrl+Z)"
+        >
+          撤销
+        </button>
+        <button
+          className="btn-sm"
+          onClick={handleRedo}
+          disabled={!canRedoNow}
+          title="重做 (Ctrl+Y)"
+        >
+          重做
+        </button>
+
+        <div className="toolbar-divider" />
+
         <button className="btn-sm" onClick={handleImportClick} title="导入 .prefab 到当前发射器">导入 Prefab</button>
         <button className="btn-sm" onClick={() => setTemplateLibraryOpen(true)} title="模板库">模板库</button>
 
@@ -234,6 +281,8 @@ const App: React.FC = () => {
 
       <div className="statusbar">
         <span>项目：{project?.name || '无'}{isDirty ? ' *' : ''}</span>
+        <span>|</span>
+        <span>选中：{selectedNodeName}</span>
         <span>|</span>
         <span>发射器：{currentEffect?.name || '无'}</span>
         <span>|</span>

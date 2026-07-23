@@ -27,6 +27,15 @@ import {
   getProjectDirFromFilePath
 } from '@/utils/project-io';
 import { generateUUID } from '@/utils/effect-defaults';
+import {
+  createSnapshot,
+  pushUndoSnapshot,
+  popUndo,
+  popRedo,
+  emptyHistoryStacks,
+  type EditorSnapshot,
+  type HistoryStacks
+} from '@/utils/project-history';
 
 const RECENT_KEY = 'fx-studio-recent-projects';
 const AUTOSAVE_KEY = 'fx-studio-autosave';
@@ -111,10 +120,38 @@ interface ProjectState {
 
   syncAutosave: () => void;
   restoreAutosave: () => boolean;
+
+  undoStack: EditorSnapshot[];
+  redoStack: EditorSnapshot[];
+  canUndo: () => boolean;
+  canRedo: () => boolean;
+  undo: () => void;
+  redo: () => void;
+  clearHistory: () => void;
 }
 
 function refreshBridge(state: Pick<ProjectState, 'project' | 'selectedNodeId'>) {
   return { currentEffect: computeCurrentEffect(state.project, state.selectedNodeId) };
+}
+
+function nextHistoryStacks(
+  stacks: HistoryStacks,
+  project: EffectProject,
+  selectedNodeId: string | null,
+  soloNodeId: string | null
+): HistoryStacks {
+  return pushUndoSnapshot(stacks, createSnapshot(project, selectedNodeId, soloNodeId));
+}
+
+function applySnapshot(snapshot: EditorSnapshot) {
+  const project = cloneProject(snapshot.project);
+  return {
+    project,
+    selectedNodeId: snapshot.selectedNodeId,
+    soloNodeId: snapshot.soloNodeId,
+    isDirty: true,
+    ...refreshBridge({ project, selectedNodeId: snapshot.selectedNodeId })
+  };
 }
 
 export const useProjectStore = create<ProjectState>((set, get) => ({
@@ -128,6 +165,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   recentProjects: loadRecentProjects(),
   currentEffect: null,
   messages: [],
+  undoStack: [],
+  redoStack: [],
 
   newProject: (name) => {
     const project = createDefaultProject(name);
@@ -137,9 +176,11 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       projectPath: null,
       projectDir: null,
       selectedNodeId: first?.id ?? null,
+      soloNodeId: null,
       isDirty: true,
       isLoaded: true,
       messages: [],
+      ...emptyHistoryStacks(),
       ...refreshBridge({ project, selectedNodeId: first?.id ?? null })
     });
   },
@@ -154,10 +195,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       projectPath: path,
       projectDir,
       selectedNodeId,
+      soloNodeId: null,
       isDirty: false,
       isLoaded: true,
       recentProjects: loadRecentProjects(),
       messages: [],
+      ...emptyHistoryStacks(),
       ...refreshBridge({ project, selectedNodeId })
     });
   },
@@ -218,9 +261,11 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       projectPath: null,
       projectDir: null,
       selectedNodeId: null,
+      soloNodeId: null,
       isDirty: false,
       currentEffect: null,
-      messages: []
+      messages: [],
+      ...emptyHistoryStacks()
     });
   },
 
@@ -239,14 +284,16 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   addEmitter: (groupId) => {
-    const { project } = get();
+    const { project, selectedNodeId, soloNodeId, undoStack, redoStack } = get();
     if (!project) return '';
+    const history = nextHistoryStacks({ undoStack, redoStack }, project, selectedNodeId, soloNodeId);
     const targetGroupId = groupId ?? project.root.id;
     const name = getNextEmitterName(project.root);
     const emitter = createDefaultEmitter(name);
     const root = insertNodeInGroup(project.root, targetGroupId, emitter);
     const nextProject = touchProjectMetadata({ ...project, root });
     set({
+      ...history,
       project: nextProject,
       selectedNodeId: emitter.id,
       isDirty: true,
@@ -256,8 +303,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   addGroup: (parentGroupId) => {
-    const { project } = get();
+    const { project, selectedNodeId, soloNodeId, undoStack, redoStack } = get();
     if (!project) return '';
+    const history = nextHistoryStacks({ undoStack, redoStack }, project, selectedNodeId, soloNodeId);
     const targetGroupId = parentGroupId ?? project.root.id;
     const group: EffectGroupNode = {
       ...createDefaultRootGroup('Group'),
@@ -267,6 +315,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     const root = insertNodeInGroup(project.root, targetGroupId, group);
     const nextProject = touchProjectMetadata({ ...project, root });
     set({
+      ...history,
       project: nextProject,
       selectedNodeId: group.id,
       isDirty: true,
@@ -276,28 +325,34 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   removeNode: (nodeId) => {
-    const { project, selectedNodeId } = get();
+    const { project, selectedNodeId, soloNodeId, undoStack, redoStack } = get();
     if (!project || nodeId === project.root.id) return;
+    const history = nextHistoryStacks({ undoStack, redoStack }, project, selectedNodeId, soloNodeId);
     const root = removeNodeFromTree(project.root, nodeId);
     const nextProject = touchProjectMetadata({ ...project, root });
     let nextSelected = selectedNodeId;
     if (selectedNodeId === nodeId) {
       nextSelected = getFirstEmitter(nextProject.root)?.id ?? null;
     }
+    const nextSolo = soloNodeId === nodeId ? null : soloNodeId;
     set({
+      ...history,
       project: nextProject,
       selectedNodeId: nextSelected,
+      soloNodeId: nextSolo,
       isDirty: true,
       ...refreshBridge({ project: nextProject, selectedNodeId: nextSelected })
     });
   },
 
   renameNode: (nodeId, name) => {
-    const { project, selectedNodeId } = get();
+    const { project, selectedNodeId, soloNodeId, undoStack, redoStack } = get();
     if (!project) return;
+    const history = nextHistoryStacks({ undoStack, redoStack }, project, selectedNodeId, soloNodeId);
     const root = updateNodeInTree(project.root, nodeId, n => ({ ...n, name }));
     const nextProject = touchProjectMetadata({ ...project, root });
     set({
+      ...history,
       project: nextProject,
       isDirty: true,
       ...refreshBridge({ project: nextProject, selectedNodeId })
@@ -305,11 +360,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   setNodeEnabled: (nodeId, enabled) => {
-    const { project, selectedNodeId } = get();
+    const { project, selectedNodeId, soloNodeId, undoStack, redoStack } = get();
     if (!project) return;
+    const history = nextHistoryStacks({ undoStack, redoStack }, project, selectedNodeId, soloNodeId);
     const root = updateNodeInTree(project.root, nodeId, n => ({ ...n, enabled }));
     const nextProject = touchProjectMetadata({ ...project, root });
     set({
+      ...history,
       project: nextProject,
       isDirty: true,
       ...refreshBridge({ project: nextProject, selectedNodeId })
@@ -319,8 +376,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   setSoloNode: (nodeId) => set({ soloNodeId: nodeId }),
 
   updateNodeTransform: (nodeId, patch) => {
-    const { project, selectedNodeId } = get();
+    const { project, selectedNodeId, soloNodeId, undoStack, redoStack } = get();
     if (!project) return;
+    const history = nextHistoryStacks({ undoStack, redoStack }, project, selectedNodeId, soloNodeId);
     const root = updateNodeInTree(project.root, nodeId, n => ({
       ...n,
       transform: {
@@ -331,6 +389,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }));
     const nextProject = touchProjectMetadata({ ...project, root });
     set({
+      ...history,
       project: nextProject,
       isDirty: true,
       ...refreshBridge({ project: nextProject, selectedNodeId })
@@ -338,7 +397,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   reparentNode: (nodeId, newParentGroupId) => {
-    const { project, selectedNodeId } = get();
+    const { project, selectedNodeId, soloNodeId, undoStack, redoStack } = get();
     if (!project || nodeId === project.root.id) return;
     const node = findNodeById(project.root, nodeId);
     if (!node) return;
@@ -346,10 +405,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     if (!parentInfo) return;
     if (parentInfo.parent.id === newParentGroupId) return;
 
+    const history = nextHistoryStacks({ undoStack, redoStack }, project, selectedNodeId, soloNodeId);
     let root = removeNodeFromTree(project.root, nodeId);
     root = insertNodeInGroup(root, newParentGroupId, node);
     const nextProject = touchProjectMetadata({ ...project, root });
     set({
+      ...history,
       project: nextProject,
       isDirty: true,
       ...refreshBridge({ project: nextProject, selectedNodeId })
@@ -357,14 +418,16 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   setCurrentEffect: (effect) => {
-    const { project, selectedNodeId } = get();
+    const { project, selectedNodeId, soloNodeId, undoStack, redoStack } = get();
     if (!project || !effect) return;
     const emitter = getSelectedEmitter(project, selectedNodeId);
     if (!emitter) return;
+    const history = nextHistoryStacks({ undoStack, redoStack }, project, selectedNodeId, soloNodeId);
     const updated = applyEffectConfigToEmitter(emitter, effect);
     const root = updateNodeInTree(project.root, updated.id, () => updated);
     const nextProject = touchProjectMetadata({ ...project, root, name: effect.name });
     set({
+      ...history,
       project: nextProject,
       isDirty: true,
       ...refreshBridge({ project: nextProject, selectedNodeId: updated.id })
@@ -372,8 +435,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   updateEffectConfig: (updater) => {
-    const { project, selectedNodeId, currentEffect } = get();
+    const { project, selectedNodeId, soloNodeId, undoStack, redoStack, currentEffect } = get();
     if (!project || !currentEffect) return;
+    const history = nextHistoryStacks({ undoStack, redoStack }, project, selectedNodeId, soloNodeId);
     const nextEffect = updater(currentEffect);
     const emitter = getSelectedEmitter(project, selectedNodeId);
     if (!emitter) return;
@@ -381,6 +445,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     const root = updateNodeInTree(project.root, updated.id, () => updated);
     const nextProject = touchProjectMetadata({ ...project, root });
     set({
+      ...history,
       project: nextProject,
       isDirty: true,
       ...refreshBridge({ project: nextProject, selectedNodeId: updated.id })
@@ -420,6 +485,29 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     } catch {
       return false;
     }
+  },
+
+  canUndo: () => get().undoStack.length > 0,
+  canRedo: () => get().redoStack.length > 0,
+
+  clearHistory: () => set(emptyHistoryStacks()),
+
+  undo: () => {
+    const { project, selectedNodeId, soloNodeId, undoStack, redoStack } = get();
+    if (!project) return;
+    const current = createSnapshot(project, selectedNodeId, soloNodeId);
+    const { stacks, snapshot } = popUndo({ undoStack, redoStack }, current);
+    if (!snapshot) return;
+    set({ ...stacks, ...applySnapshot(snapshot) });
+  },
+
+  redo: () => {
+    const { project, selectedNodeId, soloNodeId, undoStack, redoStack } = get();
+    if (!project) return;
+    const current = createSnapshot(project, selectedNodeId, soloNodeId);
+    const { stacks, snapshot } = popRedo({ undoStack, redoStack }, current);
+    if (!snapshot) return;
+    set({ ...stacks, ...applySnapshot(snapshot) });
   }
 }));
 
