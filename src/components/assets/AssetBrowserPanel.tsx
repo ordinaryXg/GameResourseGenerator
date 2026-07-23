@@ -27,7 +27,8 @@ export const AssetBrowserPanel: React.FC<AssetBrowserPanelProps> = ({
 }) => {
   const [filter, setFilter] = useState('');
   const [category, setCategory] = useState<AssetType | 'all'>('all');
-  const [sourceTab, setSourceTab] = useState<'all' | 'builtin' | 'project'>('all');
+  const [showBuiltin, setShowBuiltin] = useState(true);
+  const [showProject, setShowProject] = useState(true);
   const [menu, setMenu] = useState<AssetMenu | null>(null);
   const projectDir = useProjectStore(s => s.projectDir);
   const projectPath = useProjectStore(s => s.projectPath);
@@ -44,12 +45,12 @@ export const AssetBrowserPanel: React.FC<AssetBrowserPanelProps> = ({
   const assets = useMemo(() => {
     let list = getMergedAssets();
     if (category !== 'all') list = list.filter(a => a.type === category);
-    if (sourceTab === 'builtin') list = list.filter(a => a.source === 'builtin');
-    if (sourceTab === 'project') list = list.filter(a => a.source !== 'builtin');
+    if (!showBuiltin) list = list.filter(a => a.source !== 'builtin');
+    if (!showProject) list = list.filter(a => a.source === 'builtin');
     const q = filter.trim().toLowerCase();
     if (q) list = list.filter(a => a.name.toLowerCase().includes(q) || assetTypeLabel(a.type).includes(q));
     return list;
-  }, [getMergedAssets, filter, sourceTab, category]);
+  }, [getMergedAssets, filter, showBuiltin, showProject, category]);
 
   useEffect(() => {
     if (!selectedAssetId || !gridRef.current) return;
@@ -128,35 +129,43 @@ export const AssetBrowserPanel: React.FC<AssetBrowserPanelProps> = ({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-      <div className="panel-header" style={{ gap: 6, flexWrap: 'wrap' }}>
-        <span style={{ fontWeight: 600, fontSize: 12 }}>资产浏览器</span>
-        <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>单击在右侧查看属性 · 拖拽 · 双击应用</span>
-        <div style={{ flex: 1 }} />
-        {(['all', 'builtin', 'project'] as const).map(tab => (
-          <button
-            key={tab}
-            className={`btn-sm${sourceTab === tab ? ' active' : ''}`}
-            onClick={() => setSourceTab(tab)}
-            style={{ fontSize: 11 }}
-          >
-            {tab === 'all' ? '全部来源' : tab === 'builtin' ? '内置' : '项目'}
-          </button>
-        ))}
+      <div className="panel-header asset-browser-header">
+        <span style={{ fontWeight: 600, fontSize: 12 }}>资产</span>
+        <div style={{ flex: 1, minWidth: 0 }} />
+        <label className="asset-source-check">
+          <input
+            type="checkbox"
+            checked={showBuiltin}
+            onChange={(e) => setShowBuiltin(e.target.checked)}
+          />
+          <span>内置</span>
+        </label>
+        <label className="asset-source-check">
+          <input
+            type="checkbox"
+            checked={showProject}
+            onChange={(e) => setShowProject(e.target.checked)}
+          />
+          <span>项目</span>
+        </label>
+      </div>
+
+      <div style={{ padding: '0 6px 4px', flexShrink: 0 }}>
         <input
           type="search"
           placeholder="搜索..."
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          style={{ width: 100, fontSize: 11, padding: '2px 6px' }}
+          style={{ width: '100%', fontSize: 11, padding: '3px 6px', boxSizing: 'border-box' }}
         />
       </div>
 
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
         <div style={{
-          width: 72,
+          width: 56,
           flexShrink: 0,
           borderRight: '1px solid var(--border-color)',
-          padding: '6px 4px',
+          padding: '4px 2px',
           overflow: 'auto',
           display: 'flex',
           flexDirection: 'column',
@@ -168,7 +177,7 @@ export const AssetBrowserPanel: React.FC<AssetBrowserPanelProps> = ({
               type="button"
               className={`btn-sm${category === opt.id ? ' active' : ''}`}
               onClick={() => setCategory(opt.id)}
-              style={{ fontSize: 10, textAlign: 'left', padding: '4px 6px', width: '100%' }}
+              style={{ fontSize: 9, textAlign: 'center', padding: '3px 2px', width: '100%', lineHeight: 1.2 }}
               title={opt.id === 'spriteFrame' ? 'Cocos SpriteFrame，导出时引用子资源' : undefined}
             >
               {opt.label}
@@ -180,11 +189,12 @@ export const AssetBrowserPanel: React.FC<AssetBrowserPanelProps> = ({
           ref={gridRef}
           style={{
             flex: 1,
+            minWidth: 0,
             overflow: 'auto',
-            padding: 8,
+            padding: 6,
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(76px, 1fr))',
-            gap: 8,
+            gridTemplateColumns: 'repeat(auto-fill, minmax(64px, 1fr))',
+            gap: 6,
             alignContent: 'start'
           }}
           onClick={(e) => {
@@ -215,13 +225,13 @@ export const AssetBrowserPanel: React.FC<AssetBrowserPanelProps> = ({
                   selectAssetForInspector(asset.id);
                   setMenu({ kind: 'asset', asset, x: e.clientX, y: e.clientY });
                 }}
-                title={`${asset.name}\n单击在右侧查看属性 · 拖拽到槽位 · 双击应用`}
+                title={`${asset.name}\n单击 · 拖拽 · 双击应用`}
                 style={{
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
-                  gap: 4,
-                  padding: 6,
+                  gap: 3,
+                  padding: 4,
                   borderRadius: 6,
                   border: selected ? '2px solid var(--accent)' : '1px solid var(--border-color)',
                   background: selected ? 'rgba(88,166,255,0.12)' : 'var(--bg-tertiary)',
@@ -231,8 +241,8 @@ export const AssetBrowserPanel: React.FC<AssetBrowserPanelProps> = ({
                 }}
               >
                 <div style={{
-                  width: 48,
-                  height: 48,
+                  width: 40,
+                  height: 40,
                   borderRadius: 4,
                   background: '#1a1a22',
                   display: 'flex',

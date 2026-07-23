@@ -315,9 +315,32 @@ const App: React.FC = () => {
           </div>
         )}
 
-        <div style={{ width: panelSizes.left, flexShrink: 0, borderRight: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column' }}>
-          {activePanel === 'hierarchy' && <HierarchyPanel />}
-          {activePanel === 'ai' && aiPanelVisible && <ChatPanel />}
+        <div style={{
+          width: panelSizes.left,
+          flexShrink: 0,
+          borderRight: '1px solid var(--border-color)',
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0
+        }}>
+          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            {activePanel === 'hierarchy' && <HierarchyPanel />}
+            {activePanel === 'ai' && aiPanelVisible && <ChatPanel />}
+          </div>
+          {assetBrowserVisible && (
+            <>
+              <ResizeHandle direction="vertical" onResize={resizeAssets} />
+              <div style={{
+                height: panelSizes.assets,
+                flexShrink: 0,
+                borderTop: '1px solid var(--border-color)',
+                minHeight: 100,
+                overflow: 'hidden'
+              }}>
+                <AssetBrowserPanel onApplyAsset={handleApplyAsset} onImportAsset={openAssetImport} />
+              </div>
+            </>
+          )}
         </div>
 
         <ResizeHandle direction="horizontal" onResize={resizeLeft} />
@@ -338,24 +361,10 @@ const App: React.FC = () => {
 
         <ResizeHandle direction="horizontal" onResize={resizeRight} />
 
-        <div style={{ width: panelSizes.right, flexShrink: 0, borderLeft: '1px solid var(--border-color)' }}>
+        <div style={{ width: panelSizes.right, flexShrink: 0, borderLeft: '1px solid var(--border-color)', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
             <PropertiesPanel onApplyAsset={handleApplyAsset} />
         </div>
       </div>
-
-      {assetBrowserVisible && (
-        <>
-          <ResizeHandle direction="vertical" onResize={resizeAssets} />
-          <div style={{
-            height: panelSizes.assets,
-            borderTop: '1px solid var(--border-color)',
-            flexShrink: 0,
-            minHeight: 100
-          }}>
-            <AssetBrowserPanel onApplyAsset={handleApplyAsset} onImportAsset={openAssetImport} />
-          </div>
-        </>
-      )}
       </div>
 
       <div className="statusbar">

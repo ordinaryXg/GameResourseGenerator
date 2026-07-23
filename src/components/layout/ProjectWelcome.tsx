@@ -16,6 +16,7 @@ interface ProjectWelcomeProps {
 export const ProjectWelcome: React.FC<ProjectWelcomeProps> = ({ onProjectReady }) => {
   const {
     newProject, newProjectFromPreset, openProjectFromJson, loadProjectData,
+    openRecentProject, pruneRecentProjects,
     recentProjects, restoreAutosave
   } = useProjectStore();
   const [v1Count, setV1Count] = useState(0);
@@ -24,7 +25,8 @@ export const ProjectWelcome: React.FC<ProjectWelcomeProps> = ({ onProjectReady }
 
   useEffect(() => {
     setV1Count(hasV1Sessions() ? loadV1Sessions().length : 0);
-  }, []);
+    void pruneRecentProjects();
+  }, [pruneRecentProjects]);
 
   const handleNew = () => {
     newProject();
@@ -88,11 +90,17 @@ export const ProjectWelcome: React.FC<ProjectWelcomeProps> = ({ onProjectReady }
     setLoading(true);
     setError(null);
     try {
-      const json = await window.electronAPI.readFile(path);
-      openProjectFromJson(json, path);
-      onProjectReady();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '打开失败');
+      const result = await openRecentProject(path);
+      if (result.ok) {
+        onProjectReady();
+        return;
+      }
+      const fileName = path.split(/[/\\]/).pop() ?? path;
+      if (result.reason === 'missing') {
+        setError(`项目文件不存在，已从最近列表移除：${fileName}`);
+      } else {
+        setError(result.message ?? `无法打开：${fileName}`);
+      }
     } finally {
       setLoading(false);
     }

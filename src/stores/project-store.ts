@@ -71,6 +71,12 @@ function pushRecent(path: string) {
   return list;
 }
 
+function removeRecentFromStorage(path: string) {
+  const list = loadRecentProjects().filter(p => p !== path);
+  saveRecentProjects(list);
+  return list;
+}
+
 function computeCurrentEffect(project: EffectProject | null, selectedNodeId: string | null): EffectConfig | null {
   if (!project) return null;
   const node = selectedNodeId
@@ -107,6 +113,9 @@ interface ProjectState {
   newProjectFromPreset: (presetId: string) => void;
   loadProjectData: (project: EffectProject, path?: string | null) => void;
   openProjectFromJson: (json: string, path?: string | null) => void;
+  openRecentProject: (path: string) => Promise<{ ok: true } | { ok: false; reason: 'missing' | 'error'; message?: string }>;
+  removeRecentProject: (path: string) => void;
+  pruneRecentProjects: () => Promise<void>;
   saveProject: (path?: string) => Promise<boolean>;
   saveProjectAs: () => Promise<boolean>;
   closeProject: () => void;
@@ -255,6 +264,48 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   openProjectFromJson: (json, path = null) => {
     const project = parseProjectJson(json);
     get().loadProjectData(project, path);
+  },
+
+  openRecentProject: async (path) => {
+    const api = window.electronAPI;
+    if (!api?.readFile) {
+      return { ok: false, reason: 'error', message: '当前环境不支持打开本地项目' };
+    }
+    try {
+      if (api.exists) {
+        const exists = await api.exists(path);
+        if (!exists) {
+          get().removeRecentProject(path);
+          return { ok: false, reason: 'missing' };
+        }
+      }
+      const json = await api.readFile(path);
+      get().openProjectFromJson(json, path);
+      return { ok: true };
+    } catch (err) {
+      get().removeRecentProject(path);
+      const message = err instanceof Error ? err.message : '打开失败';
+      return { ok: false, reason: 'error', message };
+    }
+  },
+
+  removeRecentProject: (path) => {
+    set({ recentProjects: removeRecentFromStorage(path) });
+  },
+
+  pruneRecentProjects: async () => {
+    const api = window.electronAPI;
+    if (!api?.exists) return;
+    const list = loadRecentProjects();
+    if (list.length === 0) return;
+    const valid: string[] = [];
+    for (const p of list) {
+      if (await api.exists(p)) valid.push(p);
+    }
+    if (valid.length !== list.length) {
+      saveRecentProjects(valid);
+      set({ recentProjects: valid });
+    }
   },
 
   saveProject: async (path) => {

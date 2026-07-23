@@ -91,7 +91,15 @@ ipcMain.handle('dialog:saveProjectFile', async (_event, defaultName?: string) =>
 });
 
 ipcMain.handle('fs:readFile', async (_event, filePath: string) => {
-  return readFile(filePath, 'utf-8');
+  try {
+    return await readFile(filePath, 'utf-8');
+  } catch (err: unknown) {
+    const code = (err as NodeJS.ErrnoException)?.code;
+    if (code === 'ENOENT') {
+      throw new Error(`ENOENT:${filePath}`);
+    }
+    throw err;
+  }
 });
 
 ipcMain.handle('fs:writeFile', async (_event, filePath: string, content: string) => {

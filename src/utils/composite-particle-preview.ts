@@ -13,6 +13,7 @@ import {
   disposeSpriteMaterial
 } from '@/utils/texture-loader';
 import { resolveParticleBlending } from '@/utils/material-blend';
+import { syncEmitterGizmoGroup, type EmitterGizmoInput } from '@/utils/emitter-gizmo';
 
 interface TaggedParticle {
   emitterId: string;
@@ -45,6 +46,25 @@ export class CompositeParticlePreview extends ParticlePreview {
     projectDir?: string | null;
   } | null = null;
   private fallbackTexture: THREE.Texture | null = null;
+  private gizmoRoot = new THREE.Group();
+  private gizmoVisible = true;
+  private gizmoSelectedId: string | null = null;
+
+  constructor() {
+    super();
+    this.gizmoRoot.name = 'emitter-gizmos';
+    this.scene.add(this.gizmoRoot);
+  }
+
+  setEmitterGizmosVisible(visible: boolean) {
+    this.gizmoVisible = visible;
+    this.refreshGizmos();
+  }
+
+  setEmitterGizmoSelection(selectedId: string | null) {
+    this.gizmoSelectedId = selectedId;
+    this.refreshGizmos();
+  }
 
   setEmitters(
     sources: EmitterPreviewSource[],
@@ -56,6 +76,7 @@ export class CompositeParticlePreview extends ParticlePreview {
     this.assetContext = assetContext ?? null;
     const normalized = sources.map(s => ({
       id: s.id,
+      name: s.name,
       enabled: s.enabled,
       config: JSON.parse(JSON.stringify(s.config)),
       transform: {
@@ -78,12 +99,30 @@ export class CompositeParticlePreview extends ParticlePreview {
         const rt = this.runtimes.get(s.id);
         if (rt) rt.source = s;
       }
+      this.refreshGizmos();
       return;
     }
 
     this.sources = normalized;
     this.resetSimulation();
     this.play();
+    this.refreshGizmos();
+  }
+
+  private refreshGizmos() {
+    if (!this.gizmoVisible) {
+      this.gizmoRoot.visible = false;
+      return;
+    }
+    this.gizmoRoot.visible = true;
+    const inputs: EmitterGizmoInput[] = this.sources.map(s => ({
+      id: s.id,
+      name: s.name,
+      config: s.config,
+      transform: s.transform,
+      enabled: s.enabled
+    }));
+    syncEmitterGizmoGroup(this.gizmoRoot, inputs, { selectedId: this.gizmoSelectedId });
   }
 
   protected canSimulate(): boolean {

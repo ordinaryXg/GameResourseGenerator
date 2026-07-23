@@ -32,9 +32,10 @@ export const PreviewPanel: React.FC = () => {
   const previewRef = useRef<BaseParticlePreview>(getPreview('particle3d'));
   const {
     effectType, previewPlaying, setPreviewPlaying,
-    previewBackground, setPreviewBackground, showAxes, setShowAxes
+    previewBackground, setPreviewBackground, showAxes, setShowAxes,
+    showEmitterGizmos, setShowEmitterGizmos
   } = useAppStore();
-  const { project, soloNodeId, projectDir } = useProjectStore();
+  const { project, soloNodeId, projectDir, selectedNodeId } = useProjectStore();
   const getAssetById = useAssetStore(s => s.getAssetById);
   const preview = previewRef.current;
 
@@ -83,6 +84,21 @@ export const PreviewPanel: React.FC = () => {
     const inst = previewRef.current as CompositeParticlePreview;
     inst.setEmitters(previewSources, { getAsset: getAssetById, projectDir });
   }, [previewSources, effectType, getAssetById, projectDir]);
+
+  useEffect(() => {
+    if (effectType !== 'particle3d') return;
+    const inst = previewRef.current as CompositeParticlePreview;
+    inst.setEmitterGizmosVisible(showEmitterGizmos);
+  }, [showEmitterGizmos, effectType, previewSources]);
+
+  useEffect(() => {
+    if (effectType !== 'particle3d') return;
+    const inst = previewRef.current as CompositeParticlePreview;
+    const selectedEmitterId = selectedNodeId && previewSources.some(s => s.id === selectedNodeId)
+      ? selectedNodeId
+      : null;
+    inst.setEmitterGizmoSelection(selectedEmitterId);
+  }, [selectedNodeId, previewSources, effectType]);
   useEffect(() => {
     if (previewPlaying) previewRef.current.play();
     else previewRef.current.pause();
@@ -118,6 +134,15 @@ export const PreviewPanel: React.FC = () => {
         <span style={{ fontSize: 12, color: 'var(--text-secondary)', flex: 1 }}>
           {effectType === 'particle2d' ? '2D 粒子预览' : `3D 合成预览 (${previewSources.length} 发射器)`}
         </span>        <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
+          <input
+            type="checkbox"
+            checked={showEmitterGizmos}
+            onChange={(e) => setShowEmitterGizmos(e.target.checked)}
+            onClick={(e) => e.stopPropagation()}
+          />
+          发射器 Gizmo
+        </label>
+        <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
           <input
             type="checkbox"
             checked={showAxes}

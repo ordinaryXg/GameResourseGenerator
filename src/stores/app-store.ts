@@ -52,6 +52,7 @@ interface AppState {
   previewPlaying: boolean;
   previewBackground: string;
   showAxes: boolean;
+  showEmitterGizmos: boolean;
   activePanel: 'hierarchy' | 'ai';
   selectedModuleKey: string | null;
   panelSizes: PanelSizes;
@@ -78,6 +79,7 @@ interface AppState {
   setPreviewPlaying: (v: boolean) => void;
   setPreviewBackground: (color: string) => void;
   setShowAxes: (v: boolean) => void;
+  setShowEmitterGizmos: (v: boolean) => void;
   setActivePanel: (p: 'hierarchy' | 'ai') => void;
   setSelectedModuleKey: (key: string | null) => void;
   adjustPanelSize: (key: keyof PanelSizes, delta: number) => void;
@@ -108,6 +110,7 @@ export const useAppStore = create<AppState>((set) => ({
   previewPlaying: true,
   previewBackground: loadPreviewBackground(),
   showAxes: true,
+  showEmitterGizmos: true,
   activePanel: 'hierarchy',
   selectedModuleKey: null,
   panelSizes: loadPanelSizes(),
@@ -137,6 +140,7 @@ export const useAppStore = create<AppState>((set) => ({
     set({ previewBackground: color });
   },
   setShowAxes: (v) => set({ showAxes: v }),
+  setShowEmitterGizmos: (v) => set({ showEmitterGizmos: v }),
   setActivePanel: (p) => set({ activePanel: p }),
   setSelectedModuleKey: (key) => set({ selectedModuleKey: key }),
   adjustPanelSize: (key, delta) => set(s => {

@@ -5,6 +5,7 @@ import { combineTransforms, identityTransform } from './transform-utils';
 
 export interface EmitterPreviewSource {
   id: string;
+  name: string;
   config: Particle3DConfig;
   transform: Transform3D;
   enabled: boolean;
@@ -28,6 +29,7 @@ export function collectEmitterPreviewSources(
         if (soloId && node.id !== soloId) continue;
         result.push({
           id: node.id,
+          name: node.name,
           config: node.config,
           transform: world,
           enabled: node.enabled,
