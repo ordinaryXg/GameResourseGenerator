@@ -104,7 +104,9 @@ export function getDefaultParticle3DConfig(): Particle3DConfig {
       numTilesX: 1,
       numTilesY: 1,
       animation: 0,
-      frameOverTime: defaultCurve([0, 0], [1, 1])
+      frameOverTime: defaultCurve([0, 0], [1, 1]),
+      startFrame: 0,
+      rowIndex: 0
     },
     rendererModule: {
       renderMode: 'billboard',

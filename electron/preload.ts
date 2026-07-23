@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Dialog
   openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),
   openProjectFile: () => ipcRenderer.invoke('dialog:openProjectFile'),
+  importPrefabBundle: () => ipcRenderer.invoke('dialog:importPrefabBundle'),
   saveProjectFile: (defaultName?: string) => ipcRenderer.invoke('dialog:saveProjectFile', defaultName),
   readFile: (path: string) => ipcRenderer.invoke('fs:readFile', path),
 

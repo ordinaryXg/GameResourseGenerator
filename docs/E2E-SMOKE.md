@@ -4,17 +4,17 @@
 |------|------|
 | 版本 | v2.0 |
 | 最后更新 | 2026-07-23 |
-| 关联 | [RELEASE-GATE.md](./RELEASE-GATE.md) · [DEVELOPMENT-PLAN-v2.md](./DEVELOPMENT-PLAN-v2.md) |
+| 关联 | [RELEASE-GATE.md](./RELEASE-GATE.md) · [MANUAL-TEST-v2.0.md](./MANUAL-TEST-v2.0.md) |
 
 ---
 
 ## 环境准备
 
-- [ ] `npm install`
-- [ ] `npm run build` 通过
-- [ ] `npm test` 通过
-- [ ] Electron：`npm run electron:build`（Week 3）
-- [ ] Cocos Creator 3.8.x 测试项目路径可用
+- [x] `npm install`
+- [x] `npm run build` 通过
+- [x] `npm test` 通过
+- [x] Electron：`npm run electron:build`
+- [x] Cocos Creator 3.8.x 测试项目路径可用
 
 ---
 
@@ -22,13 +22,13 @@
 
 | # | 步骤 | 预期 | 结果 |
 |---|------|------|------|
-| A1 | 启动应用 → 新建项目 | 进入编辑器，层级树可见根节点 | ☐ |
-| A2 | 添加 3 个发射器（或使用预设「爆炸」） | 预览同屏播放 ≥3 个粒子系统 | ☐ |
-| A3 | 层级树拖拽 reparent | 节点移动成功，Ctrl+Z 可撤销 | ☐ |
-| A4 | 资产浏览器换 Main Texture | 预览 <1s 更新 | ☐ |
-| A5 | 打开导出弹窗 | 资产清单表显示 prefab / 贴图 / 材质 | ☐ |
-| A6 | 导出到 Cocos 项目 | 无报错，生成 prefab + 资产文件 | ☐ |
-| A7 | Cocos 中打开场景并挂载 prefab | 所有 ParticleSystem 可播放 | ☐ |
+| A1 | 启动应用 → 新建项目 | 进入编辑器，层级树可见根节点 | ✅ |
+| A2 | 添加 3 个发射器（或使用预设「爆炸」） | 预览同屏播放 ≥3 个粒子系统 | ✅ |
+| A3 | 层级树拖拽 reparent | 节点移动成功，Ctrl+Z 可撤销 | ✅ drop 框残留见 BUG-002 |
+| A4 | 资产浏览器换 Main Texture | 预览 <1s 更新 | ✅ |
+| A5 | 打开导出弹窗 | 资产清单表显示 prefab / 贴图 / 材质 | ✅ |
+| A6 | 导出到 Cocos 项目 | 无报错，生成 prefab + 资产文件 | ✅ |
+| A7 | Cocos 中打开场景并挂载 prefab | 所有 ParticleSystem 可播放 | ✅ 朝向见 BUG-003 |
 
 ---
 
@@ -36,9 +36,9 @@
 
 | # | 步骤 | 预期 | 结果 |
 |---|------|------|------|
-| B1 | 隐藏 AI 面板 | 全流程仍可完成路径 A | ☐ |
-| B2 | 选中单个发射器 → Demo「火焰特效」 | 仅更新选中发射器 | ☐ |
-| B3 | 未选中发射器时发送 | 输入禁用或提示先选中 | ☐ |
+| B1 | 隐藏 AI 面板 | 全流程仍可完成路径 A | ✅ |
+| B2 | 选中单个发射器 → Demo「火焰特效」 | 仅更新选中发射器 | ✅ UX-001 |
+| B3 | 未选中发射器时发送 | 输入禁用或提示先选中 | ✅ |
 
 ---
 
@@ -46,8 +46,8 @@
 
 | # | 步骤 | 预期 | 结果 |
 |---|------|------|------|
-| C1 | 导出多节点 prefab 后重新导入 FX Studio | 层级树与发射器数量一致 | ☐ |
-| C2 | 贴图非默认圆点 | 导入后 AssetRef 可解析 | ☐ |
+| C1 | 导出多节点 prefab 后重新导入 FX Studio | 层级树与发射器数量一致 | ❌ **BUG-001** |
+| C2 | 贴图非默认圆点 | 导入后 AssetRef 可解析 | ❌ 随 C1 |
 
 ---
 
@@ -55,9 +55,9 @@
 
 | # | 步骤 | 预期 | 结果 |
 |---|------|------|------|
-| D1 | v1 Session 迁移（如有） | 转为 `.fxproj` 无数据丢失 | ☐ |
-| D2 | 保存 `.fxproj` 再打开 | 层级与资产一致 | ☐ |
-| D3 | 导入 PNG 到已保存项目 | 落盘 `assets/textures/`（Electron） | ☐ |
+| D1 | v1 Session 迁移（如有） | 转为 `.fxproj` 无数据丢失 | ⏭ 未测 |
+| D2 | 保存 `.fxproj` 再打开 | 层级与资产一致 | ✅ |
+| D3 | 导入 PNG 到已保存项目 | 落盘 `assets/textures/`（Electron） | ✅ BUG-004 缩略图延迟 |
 
 ---
 
@@ -65,10 +65,10 @@
 
 | # | 步骤 | 预期 | 结果 |
 |---|------|------|------|
-| P1 | 5 发射器 × capacity 200，同屏预览 | 帧率 ≥ 30 FPS | ☐ |
-| P2 | Solo 单个发射器 | 帧率明显提升 | ☐ |
+| P1 | 5 发射器 × capacity 200，同屏预览 | 帧率 ≥ 30 FPS | ⏭ 无 FPS 显示 |
+| P2 | Solo 单个发射器 | 帧率明显提升 | ⏭ 无 FPS 显示 |
 
-> 自动化：`tests/preview-performance.test.ts` 校验粒子容量预算；帧率需在 DevTools Performance 或目视确认。
+> 自动化：`tests/preview-performance.test.ts` 校验粒子容量预算；帧率需 FPS UI 或 DevTools（见 UX-002）。
 
 ---
 
@@ -76,4 +76,4 @@
 
 | 日期 | 执行人 | 版本/Commit | 通过/失败 | 备注 |
 |------|--------|-------------|-----------|------|
-| | | | | |
+| 2026-07-23 | 产品走查 | v2.0.0 / 4d2e65d | **15✅ 1❌ 4⏭** | 详见 [MANUAL-TEST-v2.0.md](./MANUAL-TEST-v2.0.md) |

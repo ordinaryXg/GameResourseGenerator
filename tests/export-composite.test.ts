@@ -42,7 +42,7 @@ describe('export-composite', () => {
     expect(smokeNode._lscale.x).toBe(2);
 
     const glowNode = parsed[rootNode._children[2].__id__];
-    expect(glowNode._euler.y).toBe(45);
+    expect(glowNode._euler.y).toBeCloseTo(45);
   });
 
   it('dedupes shared textures and collects distinct materials', () => {

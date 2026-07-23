@@ -33,6 +33,7 @@ export const AssetBrowserPanel: React.FC<AssetBrowserPanelProps> = ({
   const projectDir = useProjectStore(s => s.projectDir);
   const projectPath = useProjectStore(s => s.projectPath);
   const removeProjectAsset = useProjectStore(s => s.removeProjectAsset);
+  const projectAssets = useAssetStore(s => s.projectAssets);
   const getMergedAssets = useAssetStore(s => s.getMergedAssets);
   const inspectorTarget = useAppStore(s => s.inspectorTarget);
   const selectAssetForInspector = useAppStore(s => s.selectAssetForInspector);
@@ -51,7 +52,7 @@ export const AssetBrowserPanel: React.FC<AssetBrowserPanelProps> = ({
     const q = filter.trim().toLowerCase();
     if (q) list = list.filter(a => a.name.toLowerCase().includes(q) || assetTypeLabel(a.type).includes(q));
     return list;
-  }, [getMergedAssets, filter, showBuiltin, showProject, category]);
+  }, [getMergedAssets, projectAssets, filter, showBuiltin, showProject, category]);
 
   useEffect(() => {
     if (!selectedAssetId || !gridRef.current) return;

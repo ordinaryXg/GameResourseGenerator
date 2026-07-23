@@ -1,7 +1,8 @@
 import { app, BrowserWindow, ipcMain, dialog, nativeImage, shell } from 'electron';
-import { join } from 'path';
+import { join, dirname, relative, basename } from 'path';
 import { existsSync } from 'fs';
-import { writeFile, mkdir, access, readFile } from 'fs/promises';
+import { readdir, readFile, writeFile, mkdir, access } from 'fs/promises';
+import { collectPrefabImportFiles } from '../src/utils/prefab-import-scan';
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 
@@ -88,6 +89,28 @@ ipcMain.handle('dialog:saveProjectFile', async (_event, defaultName?: string) =>
     defaultPath: `${safe}.fxproj`
   });
   return result.canceled ? null : result.filePath;
+});
+
+ipcMain.handle('dialog:importPrefabBundle', async () => {
+  const result = await dialog.showOpenDialog(mainWindow!, {
+    properties: ['openFile'],
+    filters: [{ name: 'Cocos Prefab', extensions: ['prefab'] }]
+  });
+  if (result.canceled || !result.filePaths[0]) return null;
+
+  const prefabPath = result.filePaths[0];
+  const files = await collectPrefabImportFiles(prefabPath, {
+    readdir: (dir) => readdir(dir, { withFileTypes: true }),
+    readText: (path) => readFile(path, 'utf-8'),
+    readBase64: async (path) => (await readFile(path)).toString('base64'),
+    exists: (path) => existsSync(path),
+    join,
+    dirname,
+    basename,
+    relative
+  });
+
+  return { prefabPath, assetRootDir: dirname(prefabPath), files };
 });
 
 ipcMain.handle('fs:readFile', async (_event, filePath: string) => {

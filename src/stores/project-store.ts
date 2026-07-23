@@ -113,7 +113,7 @@ interface ProjectState {
 
   newProject: (name?: string) => void;
   newProjectFromPreset: (presetId: string) => void;
-  loadProjectData: (project: EffectProject, path?: string | null) => void;
+  loadProjectData: (project: EffectProject, path?: string | null, options?: { assetRootDir?: string | null }) => void;
   openProjectFromJson: (json: string, path?: string | null) => void;
   openRecentProject: (path: string) => Promise<{ ok: true } | { ok: false; reason: 'missing' | 'error'; message?: string }>;
   removeRecentProject: (path: string) => void;
@@ -237,9 +237,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }
   },
 
-  loadProjectData: (project, path = null) => {
+  loadProjectData: (project, path = null, options) => {
     const first = getFirstEmitter(project.root);
-    const projectDir = path ? getProjectDirFromFilePath(path) : null;
+    const projectDir = options?.assetRootDir ?? (path ? getProjectDirFromFilePath(path) : null);
     const selectedNodeId = first?.id ?? null;
     if (path) pushRecent(path);
     const cloned = cloneProject(project);

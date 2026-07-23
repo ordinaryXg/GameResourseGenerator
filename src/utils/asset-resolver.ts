@@ -29,10 +29,28 @@ export function resolveAssetUrl(entry: AssetEntry, projectDir?: string | null): 
     return `${projectDir}${sep}${rel}`;
   }
   if (projectDir && !entry.uri.includes('://')) {
-    const sep = projectDir.includes('\\') ? '\\' : '/';
-    return `${projectDir}${sep}${entry.uri}`;
+    return joinPath(projectDir, entry.uri);
   }
   return entry.uri;
+}
+
+/** Join base path with relative segments (supports `../`). */
+export function joinPath(base: string, rel: string): string {
+  const win = base.includes('\\');
+  const sep = win ? '\\' : '/';
+  const baseParts = base.replace(/\\/g, '/').replace(/\/+$/, '').split('/').filter(p => p.length > 0);
+  const relParts = rel.replace(/\\/g, '/').split('/').filter(p => p.length > 0);
+  const stack = [...baseParts];
+  for (const part of relParts) {
+    if (part === '..') stack.pop();
+    else if (part !== '.') stack.push(part);
+  }
+  let joined = stack.join(sep);
+  if (win && /^[A-Za-z]:/.test(base)) {
+    const drive = base.slice(0, 2);
+    joined = joined.startsWith(drive) ? joined : `${drive}${sep}${joined.replace(/^[A-Za-z]:[\\/]?/, '')}`;
+  }
+  return joined;
 }
 
 export function invalidateAssetUrlCache(assetId?: string) {

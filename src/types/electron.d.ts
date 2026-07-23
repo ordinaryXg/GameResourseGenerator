@@ -5,6 +5,11 @@ declare global {
     electronAPI: {
       openDirectory: () => Promise<string | null>;
       openProjectFile: () => Promise<string | null>;
+      importPrefabBundle: () => Promise<{
+        prefabPath: string;
+        assetRootDir: string;
+        files: { name: string; relativePath: string; content: string; encoding?: 'utf8' | 'base64' }[];
+      } | null>;
       saveProjectFile: (defaultName?: string) => Promise<string | null>;
       readFile: (path: string) => Promise<string>;
       writeFile: (path: string, content: string) => Promise<boolean>;

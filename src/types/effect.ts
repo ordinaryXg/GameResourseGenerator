@@ -135,6 +135,10 @@ export interface TextureAnimationConfig {
   numTilesY: number;
   animation: number;
   frameOverTime: CurveConfig;
+  /** Initial frame offset (Cocos startFrame constant). */
+  startFrame?: number;
+  /** Row index for single-row animation mode. */
+  rowIndex?: number;
 }
 
 export interface RendererConfig {

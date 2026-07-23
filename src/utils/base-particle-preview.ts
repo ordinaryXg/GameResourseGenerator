@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { Particle3DConfig, RangeValue } from '@/types/effect';
 import { composeParticleColor, sampleStartColor } from '@/utils/gradient-utils';
 import { disposeSpriteMaterial } from '@/utils/texture-loader';
+import { computeParticleScale, sampleStartParticleSize } from '@/utils/particle-size';
 
 export interface AxisScreenVector {
   id: 'x' | 'y' | 'z';
@@ -14,6 +15,7 @@ interface BaseParticle {
   position: THREE.Vector3;
   velocity: THREE.Vector3;
   startColorSample: [number, number, number, number];
+  startSize: number;
   life: number;
   maxLife: number;
   elapsed: number;
@@ -33,6 +35,13 @@ export abstract class BaseParticlePreview {
   protected animationId: number | null = null;
   protected container: HTMLElement | null = null;
   protected config: Particle3DConfig | null = null;
+  private fpsFrameCount = 0;
+  private fpsLastTime = 0;
+  private onFpsUpdate: ((fps: number) => void) | null = null;
+
+  setFpsListener(listener: ((fps: number) => void) | null) {
+    this.onFpsUpdate = listener;
+  }
 
   constructor() {
     this.scene = new THREE.Scene();
@@ -144,10 +153,19 @@ export abstract class BaseParticlePreview {
 
   private start() {
     if (!this.renderer) return;
+    this.fpsLastTime = performance.now();
     const animate = () => {
       this.animationId = requestAnimationFrame(animate);
       if (this.isPlaying && this.canSimulate()) this.update(0.016);
       this.renderer!.render(this.scene, this.getCamera());
+      this.fpsFrameCount += 1;
+      const now = performance.now();
+      if (now - this.fpsLastTime >= 500) {
+        const fps = Math.round(this.fpsFrameCount * 1000 / (now - this.fpsLastTime));
+        this.fpsFrameCount = 0;
+        this.fpsLastTime = now;
+        this.onFpsUpdate?.(fps);
+      }
     };
     animate();
   }
@@ -235,7 +253,8 @@ export abstract class BaseParticlePreview {
     const pos = this.getEmitPosition(cfg);
     const vel = this.getEmitVelocity(cfg);
     const lifetime = this.getValueFromRange(cfg.mainModule.startLifetime);
-    const size = this.getValueFromRange(cfg.mainModule.startSize3D.x);
+    const startSize = sampleStartParticleSize(cfg);
+    const size = computeParticleScale(cfg, startSize, 0);
     const startSample = sampleStartColor(cfg.mainModule.startColor);
     const initialRgba = composeParticleColor(
       startSample,
@@ -270,6 +289,7 @@ export abstract class BaseParticlePreview {
       position: pos.clone(),
       velocity: vel,
       startColorSample: startSample,
+      startSize,
       life: 0,
       maxLife: lifetime,
       elapsed: 0,
@@ -288,8 +308,8 @@ export abstract class BaseParticlePreview {
   protected abstract getEmitPosition(cfg: Particle3DConfig): THREE.Vector3;
   protected abstract getEmitVelocity(cfg: Particle3DConfig): THREE.Vector3;
   protected applyForces(_p: BaseParticle, _cfg: Particle3DConfig, _dt: number) {}
-  protected updateSpriteScale(p: BaseParticle, _cfg: Particle3DConfig) {
-    const size = this.getValueFromRange(_cfg.mainModule.startSize3D.x) * (1 - p.life * 0.5);
+  protected updateSpriteScale(p: BaseParticle, cfg: Particle3DConfig) {
+    const size = computeParticleScale(cfg, p.startSize, p.life);
     p.sprite.scale.setScalar(size);
   }
 }

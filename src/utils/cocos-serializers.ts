@@ -632,9 +632,22 @@ function generateFileId(): string {
 
 // ---- Import helpers (unchanged API) ----
 
-export function parseCurveRange(raw: unknown): RangeValue {
-  if (!raw || typeof raw !== 'object') return { mode: 'constant', constant: 0 };
+function normalizeCurveRangeInput(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object') return raw;
   const r = raw as Record<string, unknown>;
+  if (r.spline && typeof r.spline === 'object') {
+    return { ...r, spline: r.spline };
+  }
+  if ((raw as { __type__?: string }).__type__ === 'cc.RealCurve') {
+    return { spline: raw };
+  }
+  return raw;
+}
+
+export function parseCurveRange(raw: unknown): RangeValue {
+  const input = normalizeCurveRangeInput(raw);
+  if (!input || typeof input !== 'object') return { mode: 'constant', constant: 0 };
+  const r = input as Record<string, unknown>;
   const mode = r.mode as number;
   if (mode === 3 || r.constantMin !== undefined) {
     return { mode: 'randomBetween', min: r.constantMin as number ?? 0, max: r.constantMax as number ?? 1 };
@@ -646,6 +659,18 @@ export function parseCurveRange(raw: unknown): RangeValue {
     return { mode: 'constant', constant: v };
   }
   return { mode: 'constant', constant: (r.constant as number) ?? 0 };
+}
+
+/** Resolve Cocos prefab `{ __id__ }` refs before parsing CurveRange. */
+export function parseCurveRangeFromPool(pool: unknown[], raw: unknown): RangeValue {
+  const resolved = resolvePrefabRef(pool, raw);
+  if (resolved && typeof resolved === 'object') {
+    const r = resolved as Record<string, unknown>;
+    if (r.spline) {
+      return parseCurveRange({ ...r, spline: resolvePrefabRef(pool, r.spline) });
+    }
+  }
+  return parseCurveRange(resolved);
 }
 
 export function resolvePrefabRef(pool: unknown[], raw: unknown): unknown {
@@ -742,10 +767,11 @@ export function parseGradient(raw: unknown): GradientConfig {
 }
 
 export function parseCurve(raw: unknown): CurveConfig {
-  if (!raw || typeof raw !== 'object') {
+  const input = normalizeCurveRangeInput(raw);
+  if (!input || typeof input !== 'object') {
     return { keys: [{ time: 0, value: 1 }, { time: 1, value: 0 }], multiplier: 1 };
   }
-  const r = raw as Record<string, unknown>;
+  const r = input as Record<string, unknown>;
   if (r.spline) {
     const s = r.spline as { _times?: number[]; _values?: Array<{ value?: number }> };
     const times = s._times ?? [0, 1];
@@ -753,7 +779,9 @@ export function parseCurve(raw: unknown): CurveConfig {
     return {
       keys: times.map((t, i) => ({
         time: t,
-        value: values[i]?.value ?? 0
+        value: typeof values[i] === 'object' && values[i]
+          ? (values[i] as { value?: number }).value ?? 0
+          : (values[i] as number) ?? 0
       })),
       multiplier: (r.multiplier as number) ?? 1
     };
@@ -763,6 +791,21 @@ export function parseCurve(raw: unknown): CurveConfig {
     return { keys: c.map(k => ({ time: k.time, value: k.value })), multiplier: (r.multiplier as number) ?? 1 };
   }
   return { keys: [{ time: 0, value: (r.constant as number) ?? 1 }, { time: 1, value: 0 }], multiplier: 1 };
+}
+
+/** Resolve Cocos prefab `{ __id__ }` refs before parsing animation curves. */
+export function parseCurveFromPool(pool: unknown[], raw: unknown): CurveConfig {
+  const resolved = resolvePrefabRef(pool, raw);
+  if (resolved && typeof resolved === 'object') {
+    const r = resolved as Record<string, unknown>;
+    if (r.spline) {
+      return parseCurve({ ...r, spline: resolvePrefabRef(pool, r.spline) });
+    }
+    if ((resolved as { __type__?: string }).__type__ === 'cc.RealCurve') {
+      return parseCurve(resolved);
+    }
+  }
+  return parseCurve(resolved);
 }
 
 export function parseBursts(raw: unknown): BurstConfig[] {

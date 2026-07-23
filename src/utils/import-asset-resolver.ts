@@ -102,12 +102,30 @@ export function extractParticleAssetUuids(
   const materialUuid = materials?.[0]?.__uuid__;
 
   let spriteFrameUuid: string | undefined;
+
   const rendererRef = ps.renderer ?? ps._N$renderer;
-  const renderer = rendererRef
-    ? (pool[(rendererRef as { __id__?: number }).__id__ ?? -1] as Record<string, unknown> | undefined)
-    : undefined;
-  const mainTexture = renderer?._mainTexture as { __uuid__?: string } | undefined;
-  spriteFrameUuid = mainTexture?.__uuid__;
+  if (rendererRef) {
+    const renderer = pool[(rendererRef as { __id__?: number }).__id__ ?? -1] as Record<string, unknown> | undefined;
+    const mainTexture = renderer?._mainTexture as { __uuid__?: string } | undefined;
+    spriteFrameUuid = mainTexture?.__uuid__;
+  }
+
+  // Cocos 3.x：ParticleSystemRenderer 也可能挂在同一节点组件列表
+  if (!spriteFrameUuid) {
+    const nodeRef = ps.node as { __id__?: number } | undefined;
+    const node = nodeRef ? pool[nodeRef.__id__ ?? -1] as Record<string, unknown> | undefined : undefined;
+    const components = node?._components as Array<{ __id__?: number }> | undefined;
+    if (components) {
+      for (const compRef of components) {
+        const comp = pool[(compRef as { __id__?: number }).__id__ ?? -1] as Record<string, unknown> | undefined;
+        if (comp?.__type__ === 'cc.ParticleSystemRenderer') {
+          const mainTexture = comp._mainTexture as { __uuid__?: string } | undefined;
+          spriteFrameUuid = mainTexture?.__uuid__;
+          break;
+        }
+      }
+    }
+  }
 
   return { materialUuid, spriteFrameUuid };
 }

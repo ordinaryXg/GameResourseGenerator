@@ -13,19 +13,36 @@ import {
   disposeSpriteMaterial
 } from '@/utils/texture-loader';
 import { resolveParticleBlending } from '@/utils/material-blend';
+import {
+  cloneTextureForSheet,
+  updateParticleTextureSheet,
+  usesTextureSheet
+} from '@/utils/texture-sheet';
+import { computeParticleScale, sampleStartParticleSize } from '@/utils/particle-size';
 import { syncEmitterGizmoGroup, type EmitterGizmoInput } from '@/utils/emitter-gizmo';
 
 interface TaggedParticle {
   emitterId: string;
   config: Particle3DConfig;
+  transform: Transform3D;
   position: THREE.Vector3;
   velocity: THREE.Vector3;
   startColorSample: [number, number, number, number];
+  startSize: number;
   life: number;
   maxLife: number;
   elapsed: number;
   sprite: THREE.Sprite;
   material: THREE.SpriteMaterial;
+  ownedTexture: THREE.Texture | null;
+}
+
+function disposeTaggedParticleMaterial(p: TaggedParticle) {
+  if (p.ownedTexture) {
+    p.ownedTexture.dispose();
+    p.ownedTexture = null;
+  }
+  disposeSpriteMaterial(p.material);
 }
 
 interface EmitterRuntime {
@@ -141,7 +158,7 @@ export class CompositeParticlePreview extends ParticlePreview {
   protected resetSimulation() {
     for (const p of this.taggedParticles) {
       this.scene.remove(p.sprite);
-      disposeSpriteMaterial(p.material);
+      disposeTaggedParticleMaterial(p);
     }
     this.taggedParticles = [];
     this.runtimes.clear();
@@ -216,7 +233,7 @@ export class CompositeParticlePreview extends ParticlePreview {
       p.life = p.elapsed / p.maxLife;
       if (p.life >= 1) {
         this.scene.remove(p.sprite);
-        disposeSpriteMaterial(p.material);
+        disposeTaggedParticleMaterial(p);
         this.taggedParticles.splice(i, 1);
         continue;
       }
@@ -235,13 +252,17 @@ export class CompositeParticlePreview extends ParticlePreview {
       );
       p.material.color.setRGB(rgba[0], rgba[1], rgba[2]);
       p.material.opacity = rgba[3];
-      this.updateSpriteScale(p as unknown as Parameters<ParticlePreview['updateSpriteScale']>[0], cfg);
+      if (p.ownedTexture && usesTextureSheet(cfg.textureAnimation)) {
+        updateParticleTextureSheet(p.ownedTexture, cfg.textureAnimation, p.life);
+      }
+      const size = computeParticleScale(cfg, p.startSize, p.life, p.transform);
+      p.sprite.scale.setScalar(size);
     }
 
     while (this.taggedParticles.length > this.maxTotalParticles) {
       const p = this.taggedParticles.shift()!;
       this.scene.remove(p.sprite);
-      disposeSpriteMaterial(p.material);
+      disposeTaggedParticleMaterial(p);
     }
   }
 
@@ -250,7 +271,7 @@ export class CompositeParticlePreview extends ParticlePreview {
       const p = this.taggedParticles[i];
       if (p.emitterId === emitterId) {
         this.scene.remove(p.sprite);
-        disposeSpriteMaterial(p.material);
+        disposeTaggedParticleMaterial(p);
         this.taggedParticles.splice(i, 1);
       }
     }
@@ -291,7 +312,8 @@ export class CompositeParticlePreview extends ParticlePreview {
     const vel = applyTransformToDirection(transform, localVel);
 
     const lifetime = this.getValueFromRange(cfg.mainModule.startLifetime);
-    const size = this.getValueFromRange(cfg.mainModule.startSize3D.x);
+    const startSize = sampleStartParticleSize(cfg);
+    const size = computeParticleScale(cfg, startSize, 0, transform);
     const startSample = sampleStartColor(cfg.mainModule.startColor);
     const initialRgba = composeParticleColor(
       startSample,
@@ -301,6 +323,13 @@ export class CompositeParticlePreview extends ParticlePreview {
     );
 
     const texture = this.getParticleTexture(source);
+    let ownedTexture: THREE.Texture | null = null;
+    let mapTexture = texture;
+    if (usesTextureSheet(cfg.textureAnimation)) {
+      ownedTexture = cloneTextureForSheet(texture);
+      mapTexture = ownedTexture;
+      updateParticleTextureSheet(ownedTexture, cfg.textureAnimation, 0);
+    }
     const blending = this.assetContext
       ? resolveParticleBlending(
         source.materialAssetId,
@@ -309,7 +338,7 @@ export class CompositeParticlePreview extends ParticlePreview {
       )
       : (cfg.rendererModule.renderMode !== 'billboard' ? THREE.AdditiveBlending : THREE.NormalBlending);
     const material = new THREE.SpriteMaterial({
-      map: texture,
+      map: mapTexture,
       blending,
       depthWrite: false,
       depthTest: true,
@@ -325,14 +354,17 @@ export class CompositeParticlePreview extends ParticlePreview {
     this.taggedParticles.push({
       emitterId: source.id,
       config: cfg,
+      transform,
       position: pos.clone(),
       velocity: vel,
       startColorSample: startSample,
+      startSize,
       life: 0,
       maxLife: lifetime,
       elapsed: 0,
       sprite,
-      material
+      material,
+      ownedTexture
     });
   }
 

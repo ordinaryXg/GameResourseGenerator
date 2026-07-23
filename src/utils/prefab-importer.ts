@@ -3,7 +3,7 @@ import type { EffectGroupNode, EffectNode, EffectProject, ParticleEmitterNode } 
 import { FX_PROJECT_VERSION } from '@/types/project';
 import { generateUUID } from './effect-defaults';
 import {
-  parseCurveRange, parseGradientFromPrefab, parseCurve, parseBursts,
+  parseCurveRangeFromPool, parseGradientFromPrefab, parseCurveFromPool, parseBursts,
   parseShapeType, parseEmitFrom, parseRenderMode, parseAlignSpace,
   resolvePrefabRef
 } from './cocos-serializers';
@@ -78,40 +78,46 @@ function readMainModule(ps: RawPrefabData): Record<string, unknown> {
   return ps as Record<string, unknown>;
 }
 
-function readShape(ps: RawPrefabData) {
-  return ps._shapeModule ?? ps._N$shapeModule;
+function resolveModule(pool: unknown[], raw: unknown): Record<string, unknown> | undefined {
+  const resolved = resolvePrefabRef(pool, raw);
+  if (resolved && typeof resolved === 'object') return resolved as Record<string, unknown>;
+  return undefined;
 }
 
-function readColorOL(ps: RawPrefabData) {
-  return ps._colorOverLifetimeModule ?? ps._N$colorOverLifetimeModule;
+function readShape(pool: unknown[], ps: RawPrefabData) {
+  return resolveModule(pool, ps._shapeModule ?? ps._N$shapeModule ?? ps.shapeModule);
 }
 
-function readSizeOL(ps: RawPrefabData) {
-  return ps._sizeOvertimeModule ?? ps._N$sizeOverLifetimeModule;
+function readColorOL(pool: unknown[], ps: RawPrefabData) {
+  return resolveModule(pool, ps._colorOverLifetimeModule ?? ps._N$colorOverLifetimeModule ?? ps.colorOverLifetimeModule);
 }
 
-function readRotationOL(ps: RawPrefabData) {
-  return ps._rotationOvertimeModule ?? ps._N$rotationOverLifetimeModule;
+function readSizeOL(pool: unknown[], ps: RawPrefabData) {
+  return resolveModule(pool, ps._sizeOvertimeModule ?? ps._N$sizeOverLifetimeModule ?? ps.sizeOvertimeModule);
 }
 
-function readVelocityOL(ps: RawPrefabData) {
-  return ps._velocityOvertimeModule ?? ps._N$velocityOverLifetimeModule;
+function readRotationOL(pool: unknown[], ps: RawPrefabData) {
+  return resolveModule(pool, ps._rotationOvertimeModule ?? ps._N$rotationOverLifetimeModule ?? ps.rotationOvertimeModule);
 }
 
-function readNoise(ps: RawPrefabData) {
-  return ps._noiseModule ?? ps._N$noiseModule;
+function readVelocityOL(pool: unknown[], ps: RawPrefabData) {
+  return resolveModule(pool, ps._velocityOvertimeModule ?? ps._N$velocityOverLifetimeModule ?? ps.velocityOvertimeModule);
 }
 
-function readTrail(ps: RawPrefabData) {
-  return ps._trailModule ?? ps._N$trailModule;
+function readNoise(pool: unknown[], ps: RawPrefabData) {
+  return resolveModule(pool, ps._noiseModule ?? ps._N$noiseModule ?? ps.noiseModule);
 }
 
-function readTexAnim(ps: RawPrefabData) {
-  return ps._textureAnimationModule ?? ps._N$textureAnimationModule;
+function readTrail(pool: unknown[], ps: RawPrefabData) {
+  return resolveModule(pool, ps._trailModule ?? ps._N$trailModule ?? ps.trailModule);
 }
 
-function readRenderer(ps: RawPrefabData) {
-  return ps.renderer ?? ps._N$renderer;
+function readTexAnim(pool: unknown[], ps: RawPrefabData) {
+  return resolveModule(pool, ps._textureAnimationModule ?? ps._N$textureAnimationModule ?? ps.textureAnimationModule);
+}
+
+function readRenderer(pool: unknown[], ps: RawPrefabData) {
+  return resolveModule(pool, ps.renderer ?? ps._N$renderer);
 }
 
 function parsePool(jsonString: string): unknown[] {
@@ -132,15 +138,16 @@ export function parseParticleSystemConfig(
   psData: RawPrefabData
 ): Particle3DConfig {
   const main = readMainModule(psData);
-  const shape = readShape(psData);
-  const colorOL = readColorOL(psData);
-  const sizeOL = readSizeOL(psData);
-  const rotationOL = readRotationOL(psData);
-  const velocityOL = readVelocityOL(psData);
-  const noise = readNoise(psData);
-  const trail = readTrail(psData);
-  const texAnim = readTexAnim(psData);
-  const renderer = readRenderer(psData);
+  const shape = readShape(prefabArray, psData);
+  const colorOL = readColorOL(prefabArray, psData);
+  const sizeOL = readSizeOL(prefabArray, psData);
+  const rotationOL = readRotationOL(prefabArray, psData);
+  const velocityOL = readVelocityOL(prefabArray, psData);
+  const noise = readNoise(prefabArray, psData);
+  const trail = readTrail(prefabArray, psData);
+  const texAnim = readTexAnim(prefabArray, psData);
+  const renderer = readRenderer(prefabArray, psData);
+  const curve = (raw: unknown) => parseCurveRangeFromPool(prefabArray, raw);
 
   return {
     mainModule: {
@@ -149,23 +156,23 @@ export function parseParticleSystemConfig(
       loop: (main.loop as boolean) ?? true,
       playOnAwake: (main.playOnAwake as boolean) ?? true,
       simulationSpeed: (main.simulationSpeed as number) ?? 1,
-      startDelay: parseCurveRange(main.startDelay).constant ?? 0,
-      startLifetime: parseCurveRange(main.startLifetime),
-      startSpeed: parseCurveRange(main.startSpeed),
+      startDelay: curve(main.startDelay).constant ?? 0,
+      startLifetime: curve(main.startLifetime),
+      startSpeed: curve(main.startSpeed),
       startSize3D: {
-        x: parseCurveRange((main.startSize3D as { x?: unknown })?.x ?? main.startSizeX),
-        y: parseCurveRange((main.startSize3D as { y?: unknown })?.y ?? main.startSizeY),
-        z: parseCurveRange((main.startSize3D as { z?: unknown })?.z ?? main.startSizeZ)
+        x: curve((main.startSize3D as { x?: unknown })?.x ?? main.startSizeX ?? main.startSize),
+        y: curve((main.startSize3D as { y?: unknown })?.y ?? main.startSizeY),
+        z: curve((main.startSize3D as { z?: unknown })?.z ?? main.startSizeZ)
       },
       startRotation3D: {
-        x: parseCurveRange(main.startRotationX),
-        y: parseCurveRange(main.startRotationY),
-        z: parseCurveRange(main.startRotationZ)
+        x: curve(main.startRotationX),
+        y: curve(main.startRotationY),
+        z: curve(main.startRotationZ ?? main.startRotation)
       },
       startColor: parseGradientFromPrefab(prefabArray, main.startColor),
-      gravityModifier: parseCurveRange(main.gravityModifier).constant ?? 0,
-      rateOverTime: parseCurveRange(main.rateOverTime).constant ?? 0,
-      rateOverDistance: parseCurveRange(main.rateOverDistance).constant ?? 0,
+      gravityModifier: curve(main.gravityModifier).constant ?? 0,
+      rateOverTime: curve(main.rateOverTime).constant ?? 0,
+      rateOverDistance: curve(main.rateOverDistance).constant ?? 0,
       bursts: parseBursts(main.bursts)
     },
     shapeModule: {
@@ -182,21 +189,21 @@ export function parseParticleSystemConfig(
     },
     sizeOverLifetime: {
       enabled: (sizeOL?._enable ?? sizeOL?.enable ?? false) as boolean,
-      size: parseCurve(sizeOL?.size)
+      size: parseCurveFromPool(prefabArray, sizeOL?.size)
     },
     rotationOverLifetime: {
       enabled: (rotationOL?._enable ?? rotationOL?.enable ?? false) as boolean,
-      rotation: parseCurve(rotationOL?.z ?? rotationOL?.rotation)
+      rotation: parseCurveFromPool(prefabArray, rotationOL?.z ?? rotationOL?.rotation)
     },
     velocityOverLifetime: {
       enabled: (velocityOL?._enable ?? velocityOL?.enable ?? false) as boolean,
-      velocityX: parseCurve(velocityOL?.x ?? velocityOL?.velocityX),
-      velocityY: parseCurve(velocityOL?.y ?? velocityOL?.velocityY),
-      velocityZ: parseCurve(velocityOL?.z ?? velocityOL?.velocityZ)
+      velocityX: parseCurveFromPool(prefabArray, velocityOL?.x ?? velocityOL?.velocityX),
+      velocityY: parseCurveFromPool(prefabArray, velocityOL?.y ?? velocityOL?.velocityY),
+      velocityZ: parseCurveFromPool(prefabArray, velocityOL?.z ?? velocityOL?.velocityZ)
     },
     noiseModule: {
       enabled: (noise?._enable ?? noise?.enable ?? false) as boolean,
-      strength: parseCurveRange(noise?.strength).constant ?? 10,
+      strength: curve(noise?.strength).constant ?? 10,
       frequency: (noise?.frequency as number) ?? 1,
       scrollSpeed: (noise?.scrollSpeed as number) ?? 1,
       octaves: (noise?.octaves as number) ?? 1
@@ -204,22 +211,24 @@ export function parseParticleSystemConfig(
     trailModule: {
       enabled: (trail?._enable ?? trail?.enable ?? false) as boolean,
       mode: (trail?.mode as number) ?? 0,
-      ratio: parseCurveRange(trail?.ratio).constant ?? 1,
-      lifetime: parseCurveRange(trail?.lifetime),
+      ratio: curve(trail?.ratio).constant ?? 1,
+      lifetime: curve(trail?.lifetime),
       colorOverTrail: parseGradientFromPrefab(prefabArray, trail?.colorOverTrail)
     },
     textureAnimation: {
       enabled: (texAnim?._enable ?? texAnim?.enable ?? false) as boolean,
-      numTilesX: (texAnim?.numTilesX as number) ?? 1,
-      numTilesY: (texAnim?.numTilesY as number) ?? 1,
+      numTilesX: Number(texAnim?.numTilesX ?? texAnim?._numTilesX ?? 1),
+      numTilesY: Number(texAnim?.numTilesY ?? texAnim?._numTilesY ?? 1),
       animation: (texAnim?.animation as number) ?? 0,
-      frameOverTime: parseCurve(texAnim?.frameOverTime)
+      frameOverTime: parseCurveFromPool(prefabArray, texAnim?.frameOverTime),
+      startFrame: curve(texAnim?.startFrame).constant ?? 0,
+      rowIndex: (texAnim?.rowIndex as number) ?? 0
     },
     rendererModule: {
       renderMode: parseRenderMode(renderer?._renderMode ?? renderer?.renderMode),
       velocityScale: (renderer?._velocityScale as number) ?? 1,
       lengthScale: (renderer?._lengthScale as number) ?? 1,
-      alignSpace: parseAlignSpace(renderer?._alignSpace)
+      alignSpace: parseAlignSpace(renderer?._alignSpace ?? renderer?.alignSpace)
     }
   };
 }

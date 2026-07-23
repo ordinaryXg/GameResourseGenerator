@@ -68,6 +68,7 @@ interface AppState {
   inspectorTarget: InspectorTarget | null;
   shaderDraft: string | null;
   inspectorSuppressFallback: boolean;
+  previewFps: number;
 
   setAISettings: (s: Partial<AISettings>) => void;
   setAppMode: (m: AppMode) => void;
@@ -99,6 +100,7 @@ interface AppState {
   selectNodeForInspector: (nodeId: string) => void;
   clearInspectorTarget: () => void;
   setShaderDraft: (code: string | null) => void;
+  setPreviewFps: (fps: number) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -128,6 +130,7 @@ export const useAppStore = create<AppState>((set) => ({
   inspectorTarget: null,
   shaderDraft: null,
   inspectorSuppressFallback: false,
+  previewFps: 0,
 
   setAISettings: (s) => set(state => ({ aiSettings: { ...state.aiSettings, ...s }, appMode: s.apiKey !== undefined ? (s.apiKey ? 'llm' : 'demo') : state.appMode })),
   setAppMode: (m) => set({ appMode: m }),
@@ -179,5 +182,6 @@ export const useAppStore = create<AppState>((set) => ({
     inspectorSuppressFallback: false
   }),
   clearInspectorTarget: () => set({ inspectorTarget: null, inspectorSuppressFallback: true }),
-  setShaderDraft: (code) => set({ shaderDraft: code })
+  setShaderDraft: (code) => set({ shaderDraft: code }),
+  setPreviewFps: (fps) => set({ previewFps: fps })
 }));

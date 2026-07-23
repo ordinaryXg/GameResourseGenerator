@@ -8,6 +8,7 @@ import { collectEmitterPreviewSources } from '@/utils/preview-sources';
 import { AxisGizmo } from '@/components/preview/AxisGizmo';
 import type { BaseParticlePreview } from '@/utils/base-particle-preview';
 import type { EffectType } from '@/types/effect';
+
 /** Viewport-style muted backgrounds (Unity/Unreal inspired). */
 const PREVIEW_BG_OPTIONS: Record<string, string> = {
   dark: '#252530',
@@ -27,13 +28,25 @@ function getPreview(type: EffectType): BaseParticlePreview {
   return instance;
 }
 
-export const PreviewPanel: React.FC = () => {
+export interface PrefabDropHandlers {
+  isDragOver: boolean;
+  onDragEnter: (e: React.DragEvent) => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDragLeave: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent) => void;
+}
+
+interface PreviewPanelProps {
+  prefabDrop?: PrefabDropHandlers;
+}
+
+export const PreviewPanel: React.FC<PreviewPanelProps> = ({ prefabDrop }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<BaseParticlePreview>(getPreview('particle3d'));
   const {
     effectType, previewPlaying, setPreviewPlaying,
     previewBackground, setPreviewBackground, showAxes, setShowAxes,
-    showEmitterGizmos, setShowEmitterGizmos
+    showEmitterGizmos, setShowEmitterGizmos, setPreviewFps
   } = useAppStore();
   const { project, soloNodeId, projectDir, selectedNodeId } = useProjectStore();
   const getAssetById = useAssetStore(s => s.getAssetById);
@@ -43,9 +56,16 @@ export const PreviewPanel: React.FC = () => {
     if (!project || effectType !== 'particle3d') return [];
     return collectEmitterPreviewSources(project.root, { soloId: soloNodeId });
   }, [project, soloNodeId, effectType, project?.metadata.updatedAt]);
+
   useEffect(() => {
     previewRef.current = getPreview(effectType);
   }, [effectType]);
+
+  useEffect(() => {
+    const inst = previewRef.current;
+    inst.setFpsListener(setPreviewFps);
+    return () => inst.setFpsListener(null);
+  }, [effectType, setPreviewFps]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -99,6 +119,7 @@ export const PreviewPanel: React.FC = () => {
       : null;
     inst.setEmitterGizmoSelection(selectedEmitterId);
   }, [selectedNodeId, previewSources, effectType]);
+
   useEffect(() => {
     if (previewPlaying) previewRef.current.play();
     else previewRef.current.pause();
@@ -121,6 +142,7 @@ export const PreviewPanel: React.FC = () => {
   }, [previewPlaying, setPreviewPlaying]);
 
   const bgKey = Object.entries(PREVIEW_BG_OPTIONS).find(([, v]) => v === previewBackground)?.[0] || 'dark';
+  const fps = useAppStore(s => s.previewFps);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -133,7 +155,13 @@ export const PreviewPanel: React.FC = () => {
         </button>
         <span style={{ fontSize: 12, color: 'var(--text-secondary)', flex: 1 }}>
           {effectType === 'particle2d' ? '2D 粒子预览' : `3D 合成预览 (${previewSources.length} 发射器)`}
-        </span>        <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
+        </span>
+        {effectType === 'particle3d' && (
+          <span style={{ fontSize: 11, color: 'var(--text-secondary)', minWidth: 52, textAlign: 'right' }}>
+            {fps > 0 ? `${fps} FPS` : '— FPS'}
+          </span>
+        )}
+        <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
           <input
             type="checkbox"
             checked={showEmitterGizmos}
@@ -166,12 +194,31 @@ export const PreviewPanel: React.FC = () => {
       <div
         ref={containerRef}
         className="preview-viewport"
+        style={{ position: 'relative', flex: 1, minHeight: 0 }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
         onWheel={handleWheel}
+        onDragEnter={prefabDrop?.onDragEnter}
+        onDragOver={prefabDrop?.onDragOver}
+        onDragLeave={prefabDrop?.onDragLeave}
+        onDrop={prefabDrop?.onDrop}
       >
+        {prefabDrop?.isDragOver && (
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'rgba(88, 166, 255, 0.15)',
+            border: '2px dashed var(--accent)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 50, pointerEvents: 'none',
+            fontSize: 14, color: 'var(--accent)', fontWeight: 600,
+            textAlign: 'center', padding: 12
+          }}>
+            释放以导入 .prefab<br />
+            <span style={{ fontSize: 11, fontWeight: 400 }}>可连同 .mtl / .png / .meta</span>
+          </div>
+        )}
         <AxisGizmo preview={previewRef.current} visible={showAxes} />
       </div>
     </div>

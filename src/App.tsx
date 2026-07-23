@@ -31,7 +31,7 @@ const App: React.FC = () => {
     panelSizes, aiSettings, setEffectType, setPreviewVisible,
     setSettingsOpen, setExportOpen, setActivePanel, adjustPanelSize, showToastMessage,
     aiPanelVisible, setAiPanelVisible, assetBrowserVisible, setAssetBrowserVisible,
-    inspectorTarget, inspectorSuppressFallback, setPresetProjectsOpen
+    inspectorTarget, inspectorSuppressFallback, setPresetProjectsOpen, previewFps
   } = useAppStore();
 
   const {
@@ -48,7 +48,7 @@ const App: React.FC = () => {
   const {
     isDragOver, fileInputRef,
     handleImportClick, handleFileChange,
-    handleDragOver, handleDragLeave, handleDrop
+    handleDragEnter, handleDragOver, handleDragLeave, handleDrop
   } = usePrefabImport();
 
   const {
@@ -223,30 +223,13 @@ const App: React.FC = () => {
         <input
           ref={fileInputRef}
           type="file"
-          accept=".prefab"
+          accept=".prefab,.mtl,.png,.jpg,.jpeg,.webp,.meta"
           multiple
           style={{ display: 'none' }}
           onChange={handleFileChange}
         />
 
         <div className="toolbar-divider" />
-
-        <div className="toolbar-tabs">
-          <button
-            className={`toolbar-tab${activePanel === 'hierarchy' ? ' active' : ''}`}
-            onClick={() => setActivePanel('hierarchy')}
-          >
-            层级
-          </button>
-          {aiPanelVisible && (
-            <button
-              className={`toolbar-tab${activePanel === 'ai' ? ' active' : ''}`}
-              onClick={() => setActivePanel('ai')}
-            >
-              AI 助手
-            </button>
-          )}
-        </div>
 
         <select
           className="select-sm"
@@ -278,18 +261,6 @@ const App: React.FC = () => {
         </button>
 
         <button
-          className={`btn-sm${aiPanelVisible ? ' active' : ''}`}
-          onClick={() => {
-            setAiPanelVisible(!aiPanelVisible);
-            if (!aiPanelVisible) setActivePanel('ai');
-            else setActivePanel('hierarchy');
-          }}
-          title="显示/隐藏 AI 助手"
-        >
-          AI
-        </button>
-
-        <button
           className="btn-sm"
           onClick={handleExport}
           disabled={!currentEffect || isStreaming}
@@ -303,23 +274,7 @@ const App: React.FC = () => {
       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0 }}>
       <div
         style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative', minHeight: 0 }}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
       >
-        {isDragOver && (
-          <div style={{
-            position: 'absolute', inset: 0,
-            background: 'rgba(88, 166, 255, 0.15)',
-            border: '2px dashed var(--accent)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            zIndex: 50, pointerEvents: 'none',
-            fontSize: 18, color: 'var(--accent)', fontWeight: 600
-          }}>
-            释放以导入 .prefab 文件
-          </div>
-        )}
-
         <div style={{
           width: panelSizes.left,
           flexShrink: 0,
@@ -328,6 +283,37 @@ const App: React.FC = () => {
           flexDirection: 'column',
           minHeight: 0
         }}>
+          <div className="panel-header" style={{ gap: 4, padding: '4px 6px', flexShrink: 0 }}>
+            <button
+              type="button"
+              className={`btn-sm${activePanel === 'hierarchy' ? ' active' : ''}`}
+              onClick={() => setActivePanel('hierarchy')}
+            >
+              层级
+            </button>
+            {aiPanelVisible && (
+              <button
+                type="button"
+                className={`btn-sm${activePanel === 'ai' ? ' active' : ''}`}
+                onClick={() => setActivePanel('ai')}
+              >
+                AI
+              </button>
+            )}
+            <div style={{ flex: 1 }} />
+            <button
+              type="button"
+              className={`btn-sm${aiPanelVisible ? ' active' : ''}`}
+              onClick={() => {
+                const next = !aiPanelVisible;
+                setAiPanelVisible(next);
+                setActivePanel(next ? 'ai' : 'hierarchy');
+              }}
+              title="显示/隐藏 AI 助手"
+            >
+              {aiPanelVisible ? 'AI 开' : 'AI 关'}
+            </button>
+          </div>
           <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             {activePanel === 'hierarchy' && <HierarchyPanel />}
             {activePanel === 'ai' && aiPanelVisible && <ChatPanel />}
@@ -358,7 +344,15 @@ const App: React.FC = () => {
             <>
               <ResizeHandle direction="vertical" onResize={resizePreview} />
               <div style={{ height: panelSizes.preview, borderTop: '1px solid var(--border-color)', flexShrink: 0 }}>
-                <PreviewPanel />
+                <PreviewPanel
+                  prefabDrop={{
+                    isDragOver,
+                    onDragEnter: handleDragEnter,
+                    onDragOver: handleDragOver,
+                    onDragLeave: handleDragLeave,
+                    onDrop: handleDrop
+                  }}
+                />
               </div>
             </>
           )}
@@ -384,6 +378,12 @@ const App: React.FC = () => {
         <span>引擎：{engineLabel}</span>
         <span>|</span>
         <span>类型：{effectType === 'particle3d' ? '3D 粒子' : effectType}</span>
+        {previewVisible && effectType === 'particle3d' && (
+          <>
+            <span>|</span>
+            <span>FPS：{previewFps > 0 ? previewFps : '—'}</span>
+          </>
+        )}
         {aiPanelVisible && activePanel === 'ai' && (
           <>
             <span>|</span>

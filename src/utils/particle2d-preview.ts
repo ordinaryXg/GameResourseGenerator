@@ -41,8 +41,8 @@ export class Particle2DPreview extends BaseParticlePreview {
     p.velocity.y -= cfg.mainModule.gravityModifier * 9.8 * dt;
   }
 
-  protected updateSpriteScale(p: any, _cfg: Particle3DConfig) {
-    const size = this.getValueFromRange(_cfg.mainModule.startSize3D.x) * (1 - p.life * 0.5);
+  protected updateSpriteScale(p: any, cfg: Particle3DConfig) {
+    const size = computeParticleScale(cfg, p.startSize, p.life);
     p.sprite.scale.setScalar(size);
   }
 }
