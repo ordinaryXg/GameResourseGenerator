@@ -129,7 +129,7 @@ export abstract class BaseParticlePreview {
     });
   }
 
-  private resetSimulation() {
+  protected resetSimulation() {
     for (const p of this.particles) { this.scene.remove(p.sprite); p.material.dispose(); }
     this.particles = [];
     this.elapsedTime = 0;

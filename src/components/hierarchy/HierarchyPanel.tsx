@@ -16,10 +16,14 @@ interface TreeRowProps {
   onSelectModule: (key: string) => void;
   selectedModuleKey: string | null;
   showModules: boolean;
+  soloId?: string | null;
+  onSolo: (id: string) => void;
+  onToggleEnabled: (id: string, enabled: boolean) => void;
 }
 
 const TreeRow: React.FC<TreeRowProps> = ({
-  node, depth, selectedId, expanded, onToggle, onSelect, onSelectModule, selectedModuleKey, showModules
+  node, depth, selectedId, expanded, onToggle, onSelect, onSelectModule, selectedModuleKey, showModules,
+  soloId, onSolo, onToggleEnabled
 }) => {
   const isGroup = isGroupNode(node);
   const isOpen = expanded.has(node.id);
@@ -40,9 +44,27 @@ const TreeRow: React.FC<TreeRowProps> = ({
             {isOpen ? '▾' : '▸'}
           </span>
         ) : <span style={{ width: 14 }} />}
-        <span style={{ opacity: node.enabled ? 1 : 0.4 }}>
+        <span style={{ opacity: node.enabled ? 1 : 0.4, flex: 1 }}>
           {isGroup ? '📁' : '✨'} {node.name}
         </span>
+        {!isGroup && (
+          <button
+            className="btn-sm"
+            style={{ padding: '0 4px', fontSize: 10, opacity: soloId === node.id ? 1 : 0.5 }}
+            title="Solo 单独预览"
+            onClick={(e) => { e.stopPropagation(); onSolo(node.id); }}
+          >
+            S
+          </button>
+        )}
+        <button
+          className="btn-sm"
+          style={{ padding: '0 4px', fontSize: 10 }}
+          title={node.enabled ? '隐藏' : '显示'}
+          onClick={(e) => { e.stopPropagation(); onToggleEnabled(node.id, !node.enabled); }}
+        >
+          {node.enabled ? '👁' : '🚫'}
+        </button>
       </div>
       {isGroup && isOpen && node.children.map(child => (
         <TreeRow
@@ -56,6 +78,9 @@ const TreeRow: React.FC<TreeRowProps> = ({
           onSelectModule={onSelectModule}
           selectedModuleKey={selectedModuleKey}
           showModules={showModules}
+          soloId={soloId}
+          onSolo={onSolo}
+          onToggleEnabled={onToggleEnabled}
         />
       ))}
       {showModules && isEmitterNode(node) && isSelected && MODULE_DEFS.map(mod => (
@@ -74,7 +99,8 @@ const TreeRow: React.FC<TreeRowProps> = ({
 
 export const HierarchyPanel: React.FC = () => {
   const {
-    project, selectedNodeId, selectNode, addEmitter, addGroup, removeNode, renameNode, projectPath, isDirty
+    project, selectedNodeId, selectNode, addEmitter, addGroup, removeNode, renameNode,
+    projectPath, isDirty, soloNodeId, setSoloNode, setNodeEnabled, reparentNode
   } = useProjectStore();
   const { selectedModuleKey, setSelectedModuleKey, showToastMessage } = useAppStore();
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(['root']));
@@ -138,14 +164,31 @@ export const HierarchyPanel: React.FC = () => {
         <button className="btn-sm" onClick={() => addEmitter()} title="添加粒子系统">+ 发射器</button>
         <button className="btn-sm" onClick={() => addGroup()} title="添加组">+ 组</button>
         {selectedNodeId && selectedNodeId !== project.root.id && (
-          <button
-            className="btn-sm"
-            onClick={() => {
-              removeNode(selectedNodeId);
-              showToastMessage('已删除节点');
-            }}
-          >
-            删除
+          <>
+            <button
+              className="btn-sm"
+              onClick={() => {
+                removeNode(selectedNodeId);
+                showToastMessage('已删除节点');
+              }}
+            >
+              删除
+            </button>
+            <button
+              className="btn-sm"
+              onClick={() => {
+                reparentNode(selectedNodeId, project.root.id);
+                showToastMessage('已移动到根节点');
+              }}
+              title="移动到根"
+            >
+              ↑根
+            </button>
+          </>
+        )}
+        {soloNodeId && (
+          <button className="btn-sm" onClick={() => setSoloNode(null)} title="取消 Solo">
+            取消 Solo
           </button>
         )}
       </div>
@@ -162,6 +205,9 @@ export const HierarchyPanel: React.FC = () => {
             onSelectModule={setSelectedModuleKey}
             selectedModuleKey={selectedModuleKey}
             showModules={true}
+            soloId={soloNodeId}
+            onSolo={(id) => setSoloNode(soloNodeId === id ? null : id)}
+            onToggleEnabled={(id, enabled) => setNodeEnabled(id, enabled)}
           />
         )}
       </div>

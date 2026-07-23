@@ -15,7 +15,8 @@ import {
   removeNodeFromTree,
   insertNodeInGroup,
   cloneProject,
-  touchProjectMetadata
+  touchProjectMetadata,
+  findParentOfNode
 } from '@/utils/project-tree';
 import {
   serializeProject,
@@ -76,6 +77,7 @@ interface ProjectState {
   projectPath: string | null;
   projectDir: string | null;
   selectedNodeId: string | null;
+  soloNodeId: string | null;
   isDirty: boolean;
   isLoaded: boolean;
   recentProjects: string[];
@@ -98,6 +100,9 @@ interface ProjectState {
   removeNode: (nodeId: string) => void;
   renameNode: (nodeId: string, name: string) => void;
   setNodeEnabled: (nodeId: string, enabled: boolean) => void;
+  setSoloNode: (nodeId: string | null) => void;
+  updateNodeTransform: (nodeId: string, patch: Partial<import('@/types/project').Transform3D>) => void;
+  reparentNode: (nodeId: string, newParentGroupId: string) => void;
 
   setCurrentEffect: (effect: EffectConfig | null) => void;
   updateEffectConfig: (updater: (prev: EffectConfig) => EffectConfig) => void;
@@ -117,6 +122,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   projectPath: null,
   projectDir: null,
   selectedNodeId: null,
+  soloNodeId: null,
   isDirty: false,
   isLoaded: false,
   recentProjects: loadRecentProjects(),
@@ -302,6 +308,46 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     const { project, selectedNodeId } = get();
     if (!project) return;
     const root = updateNodeInTree(project.root, nodeId, n => ({ ...n, enabled }));
+    const nextProject = touchProjectMetadata({ ...project, root });
+    set({
+      project: nextProject,
+      isDirty: true,
+      ...refreshBridge({ project: nextProject, selectedNodeId })
+    });
+  },
+
+  setSoloNode: (nodeId) => set({ soloNodeId: nodeId }),
+
+  updateNodeTransform: (nodeId, patch) => {
+    const { project, selectedNodeId } = get();
+    if (!project) return;
+    const root = updateNodeInTree(project.root, nodeId, n => ({
+      ...n,
+      transform: {
+        position: patch.position ?? n.transform.position,
+        rotation: patch.rotation ?? n.transform.rotation,
+        scale: patch.scale ?? n.transform.scale
+      }
+    }));
+    const nextProject = touchProjectMetadata({ ...project, root });
+    set({
+      project: nextProject,
+      isDirty: true,
+      ...refreshBridge({ project: nextProject, selectedNodeId })
+    });
+  },
+
+  reparentNode: (nodeId, newParentGroupId) => {
+    const { project, selectedNodeId } = get();
+    if (!project || nodeId === project.root.id) return;
+    const node = findNodeById(project.root, nodeId);
+    if (!node) return;
+    const parentInfo = findParentOfNode(project.root, nodeId);
+    if (!parentInfo) return;
+    if (parentInfo.parent.id === newParentGroupId) return;
+
+    let root = removeNodeFromTree(project.root, nodeId);
+    root = insertNodeInGroup(root, newParentGroupId, node);
     const nextProject = touchProjectMetadata({ ...project, root });
     set({
       project: nextProject,

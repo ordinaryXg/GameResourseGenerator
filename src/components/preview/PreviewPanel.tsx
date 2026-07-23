@@ -1,12 +1,12 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useMemo } from 'react';
 import { useAppStore } from '@/stores/app-store';
 import { useProjectStore } from '@/stores/project-store';
-import { ParticlePreview } from '@/utils/particle-preview';
+import { CompositeParticlePreview } from '@/utils/composite-particle-preview';
 import { Particle2DPreview } from '@/utils/particle2d-preview';
+import { collectEmitterPreviewSources } from '@/utils/preview-sources';
 import { AxisGizmo } from '@/components/preview/AxisGizmo';
 import type { BaseParticlePreview } from '@/utils/base-particle-preview';
-import type { Particle3DConfig, EffectType } from '@/types/effect';
-
+import type { EffectType } from '@/types/effect';
 /** Viewport-style muted backgrounds (Unity/Unreal inspired). */
 const PREVIEW_BG_OPTIONS: Record<string, string> = {
   dark: '#252530',
@@ -21,7 +21,7 @@ function getPreview(type: EffectType): BaseParticlePreview {
   const cached = previewCache.get(type);
   if (cached) return cached;
 
-  const instance = type === 'particle2d' ? new Particle2DPreview() : new ParticlePreview();
+  const instance = type === 'particle2d' ? new Particle2DPreview() : new CompositeParticlePreview();
   previewCache.set(type, instance);
   return instance;
 }
@@ -33,11 +33,13 @@ export const PreviewPanel: React.FC = () => {
     effectType, previewPlaying, setPreviewPlaying,
     previewBackground, setPreviewBackground, showAxes, setShowAxes
   } = useAppStore();
-  const { currentEffect } = useProjectStore();
-  const config = currentEffect?.config as Particle3DConfig | undefined;
-
+  const { project, soloNodeId } = useProjectStore();
   const preview = previewRef.current;
 
+  const previewSources = useMemo(() => {
+    if (!project || effectType !== 'particle3d') return [];
+    return collectEmitterPreviewSources(project.root, { soloId: soloNodeId });
+  }, [project, soloNodeId, effectType]);
   useEffect(() => {
     previewRef.current = getPreview(effectType);
   }, [effectType]);
@@ -75,9 +77,10 @@ export const PreviewPanel: React.FC = () => {
   }, [previewBackground, effectType]);
 
   useEffect(() => {
-    if (config) previewRef.current.setConfig(config);
-  }, [config, effectType]);
-
+    if (effectType !== 'particle3d') return;
+    const inst = previewRef.current as CompositeParticlePreview;
+    inst.setEmitters(previewSources);
+  }, [previewSources, effectType]);
   useEffect(() => {
     if (previewPlaying) previewRef.current.play();
     else previewRef.current.pause();
@@ -111,9 +114,8 @@ export const PreviewPanel: React.FC = () => {
           重置
         </button>
         <span style={{ fontSize: 12, color: 'var(--text-secondary)', flex: 1 }}>
-          {effectType === 'particle2d' ? '2D 粒子预览' : '3D 粒子预览'}
-        </span>
-        <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
+          {effectType === 'particle2d' ? '2D 粒子预览' : `3D 合成预览 (${previewSources.length} 发射器)`}
+        </span>        <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
           <input
             type="checkbox"
             checked={showAxes}

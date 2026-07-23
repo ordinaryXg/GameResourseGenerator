@@ -4,6 +4,9 @@ import { useAppStore } from '@/stores/app-store';
 import type { Particle3DConfig, RangeValue, ShapeType, RenderMode, BurstConfig } from '@/types/effect';
 import { GradientEditor } from './GradientEditor';
 import { CurveEditor } from './CurveEditor';
+import { TransformSection } from './TransformSection';
+import { findNodeById } from '@/utils/project-tree';
+import { isEmitterNode, isGroupNode } from '@/types/project';
 
 interface SectionProps {
   id?: string;
@@ -95,9 +98,13 @@ const RangeInput: React.FC<{
 );
 
 export const InspectorPanel: React.FC = () => {
-  const { currentEffect, updateEffectConfig } = useProjectStore();
+  const {
+    project, selectedNodeId, currentEffect, updateEffectConfig,
+    updateNodeTransform, setNodeEnabled
+  } = useProjectStore();
   const { selectedModuleKey } = useAppStore();
   const config = currentEffect?.config as Particle3DConfig | undefined;
+  const selectedNode = project && selectedNodeId ? findNodeById(project.root, selectedNodeId) : null;
 
   const updateMain = useCallback((updates: Partial<Particle3DConfig['mainModule']>) => {
     updateEffectConfig((prev) => ({
@@ -158,7 +165,7 @@ export const InspectorPanel: React.FC = () => {
     });
   }, [updateEffectConfig]);
 
-  if (!currentEffect || !config) {
+  if (!project || !selectedNode) {
     return (
       <div style={{
         display: 'flex',
@@ -169,7 +176,35 @@ export const InspectorPanel: React.FC = () => {
         fontSize: 14,
         padding: 16
       }}>
-        选择一个特效以查看属性
+        在层级树中选择一个节点
+      </div>
+    );
+  }
+
+  const isEmitter = isEmitterNode(selectedNode);
+
+  if (!isEmitter || !currentEffect || !config) {
+    return (
+      <div style={{ height: '100%', overflow: 'auto' }}>
+        <div className="panel-header">属性检查器 — {selectedNode.name}</div>
+        <Section title="变换 (Transform)" defaultOpen>
+          <TransformSection
+            transform={selectedNode.transform}
+            onChange={(patch) => selectedNodeId && updateNodeTransform(selectedNodeId, patch)}
+          />
+        </Section>
+        {isGroupNode(selectedNode) && (
+          <Section title="组" defaultOpen={false}>
+            <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input
+                type="checkbox"
+                checked={selectedNode.enabled}
+                onChange={(e) => selectedNodeId && setNodeEnabled(selectedNodeId, e.target.checked)}
+              />
+              启用组及其子节点
+            </label>
+          </Section>
+        )}
       </div>
     );
   }
@@ -178,7 +213,25 @@ export const InspectorPanel: React.FC = () => {
 
   return (
     <div style={{ height: '100%', overflow: 'auto' }}>
-      <div className="panel-header">属性检查器</div>
+      <div className="panel-header">属性检查器 — {selectedNode.name}</div>
+
+      <Section title="变换 (Transform)" defaultOpen>
+        <TransformSection
+          transform={selectedNode.transform}
+          onChange={(patch) => selectedNodeId && updateNodeTransform(selectedNodeId, patch)}
+        />
+      </Section>
+
+      <Section title="发射器" defaultOpen={false}>
+        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <input
+            type="checkbox"
+            checked={selectedNode.enabled}
+            onChange={(e) => selectedNodeId && setNodeEnabled(selectedNodeId, e.target.checked)}
+          />
+          启用发射器
+        </label>
+      </Section>
 
       <Section id="section-mainModule" title="主模块" highlighted={isHighlighted('mainModule')}>
         <div style={{ marginBottom: 6 }}>
