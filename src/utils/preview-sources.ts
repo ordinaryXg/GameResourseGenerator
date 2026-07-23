@@ -9,6 +9,7 @@ export interface EmitterPreviewSource {
   transform: Transform3D;
   enabled: boolean;
   mainTextureAssetId?: string;
+  materialAssetId?: string;
 }
 
 export function collectEmitterPreviewSources(
@@ -30,7 +31,8 @@ export function collectEmitterPreviewSources(
           config: node.config,
           transform: world,
           enabled: node.enabled,
-          mainTextureAssetId: node.assetRefs.mainTexture
+          mainTextureAssetId: node.assetRefs.mainTexture,
+          materialAssetId: node.assetRefs.material
         });
       } else if (isGroupNode(node)) {
         if (!node.enabled && !includeDisabled) continue;

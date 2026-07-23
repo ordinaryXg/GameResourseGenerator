@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { Particle3DConfig, RangeValue } from '@/types/effect';
 import { composeParticleColor, sampleStartColor } from '@/utils/gradient-utils';
+import { disposeSpriteMaterial } from '@/utils/texture-loader';
 
 export interface AxisScreenVector {
   id: 'x' | 'y' | 'z';
@@ -130,7 +131,7 @@ export abstract class BaseParticlePreview {
   }
 
   protected resetSimulation() {
-    for (const p of this.particles) { this.scene.remove(p.sprite); p.material.dispose(); }
+    for (const p of this.particles) { this.scene.remove(p.sprite); disposeSpriteMaterial(p.material); }
     this.particles = [];
     this.elapsedTime = 0;
     this.emitTimer = 0;
@@ -205,7 +206,7 @@ export abstract class BaseParticlePreview {
       const p = this.particles[i];
       p.elapsed += dtCapped;
       p.life = p.elapsed / p.maxLife;
-      if (p.life >= 1) { this.scene.remove(p.sprite); p.material.dispose(); this.particles.splice(i, 1); continue; }
+      if (p.life >= 1) { this.scene.remove(p.sprite); disposeSpriteMaterial(p.material); this.particles.splice(i, 1); continue; }
 
       p.position.x += p.velocity.x * dtCapped;
       p.position.y += p.velocity.y * dtCapped;
@@ -225,7 +226,7 @@ export abstract class BaseParticlePreview {
     }
 
     while (this.particles.length > this.maxParticles) {
-      const p = this.particles.shift()!; this.scene.remove(p.sprite); p.material.dispose();
+      const p = this.particles.shift()!; this.scene.remove(p.sprite); disposeSpriteMaterial(p.material);
     }
   }
 

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { generatePrefab } from '../src/utils/export-pipeline';
 import { getDefaultEffectConfig } from '../src/utils/effect-defaults';
 import { BUILTIN_PARTICLE_EFFECT_UUID } from '../src/utils/cocos-serializers';
+import { createBuiltinAssetEntries } from '../src/data/builtin-assets';
 
 describe('export-pipeline', () => {
   it('generates valid .prefab JSON array with Cocos 3.8 reference format', () => {
@@ -125,5 +126,31 @@ describe('export-pipeline', () => {
     expect(renderer._velocityScale).toBe(2.5);
     expect(renderer._lengthScale).toBe(0.8);
     expect(renderer._alignSpace).toBeUndefined();
+  });
+
+  it('exports texture from emitter assetRefs (same as preview)', () => {
+    const effect = getDefaultEffectConfig('particle3d', 'StarTex');
+    const builtins = createBuiltinAssetEntries();
+    const result = generatePrefab(effect, {
+      assetRefs: { mainTexture: 'builtin-particle-star' },
+      projectAssets: [],
+      getAsset: (id) => builtins.find(a => a.id === id) ?? null
+    });
+    expect(result.textureFileName).toBe('particle-star.png');
+
+    const mtl = JSON.parse(result.materialContent);
+    expect(mtl._techIdx).toBe(1);
+  });
+
+  it('exports alpha material techIdx from assetRefs', () => {
+    const effect = getDefaultEffectConfig('particle3d', 'AlphaMat');
+    const builtins = createBuiltinAssetEntries();
+    const result = generatePrefab(effect, {
+      assetRefs: { mainTexture: 'builtin-particle-circle', material: 'builtin-mat-particle-alpha' },
+      projectAssets: [],
+      getAsset: (id) => builtins.find(a => a.id === id) ?? null
+    });
+    const mtl = JSON.parse(result.materialContent);
+    expect(mtl._techIdx).toBe(0);
   });
 });

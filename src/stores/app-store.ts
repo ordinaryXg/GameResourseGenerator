@@ -66,7 +66,6 @@ interface AppState {
   newEffectModalOpen: boolean;
   aiPanelVisible: boolean;
   assetBrowserVisible: boolean;
-  pendingAssetPick: { nodeId: string; slot: 'mainTexture' } | null;
 
   setAISettings: (s: Partial<AISettings>) => void;
   setAppMode: (m: AppMode) => void;
@@ -91,7 +90,6 @@ interface AppState {
   setNewEffectModalOpen: (v: boolean) => void;
   setAiPanelVisible: (v: boolean) => void;
   setAssetBrowserVisible: (v: boolean) => void;
-  setPendingAssetPick: (v: { nodeId: string; slot: 'mainTexture' } | null) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -116,7 +114,6 @@ export const useAppStore = create<AppState>((set) => ({
   newEffectModalOpen: false,
   aiPanelVisible: false,
   assetBrowserVisible: true,
-  pendingAssetPick: null,
 
   setAISettings: (s) => set(state => ({ aiSettings: { ...state.aiSettings, ...s }, appMode: s.apiKey !== undefined ? (s.apiKey ? 'llm' : 'demo') : state.appMode })),
   setAppMode: (m) => set({ appMode: m }),
@@ -155,6 +152,5 @@ export const useAppStore = create<AppState>((set) => ({
   setLang: (l) => set({ lang: l }),
   setNewEffectModalOpen: (v) => set({ newEffectModalOpen: v }),
   setAiPanelVisible: (v) => set({ aiPanelVisible: v }),
-  setAssetBrowserVisible: (v) => set({ assetBrowserVisible: v }),
-  setPendingAssetPick: (v) => set({ pendingAssetPick: v })
+  setAssetBrowserVisible: (v) => set({ assetBrowserVisible: v })
 }));

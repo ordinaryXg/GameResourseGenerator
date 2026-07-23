@@ -1,4 +1,6 @@
 import type { EffectConfig, Particle3DConfig } from '@/types/effect';
+import type { EmitterAssetRefs } from '@/types/asset';
+import type { AssetEntry } from '@/types/asset';
 import { generateUUID } from './effect-defaults';
 import {
   CocosPrefabBuilder,
@@ -7,6 +9,11 @@ import {
   buildPrefabMeta
 } from './cocos-serializers';
 import { buildDefaultTextureExport } from './default-particle-texture';
+import {
+  buildTextureExportFromAsset,
+  resolveTextureAssetForExport,
+  resolveMaterialTechIdx
+} from './asset-texture-export';
 
 export interface PrefabExportResult {
   prefabContent: string;
@@ -18,19 +25,34 @@ export interface PrefabExportResult {
   texturePngBase64: string;
 }
 
-export function generatePrefab(effectConfig: EffectConfig): PrefabExportResult {
+export interface PrefabExportContext {
+  assetRefs?: EmitterAssetRefs;
+  projectAssets?: AssetEntry[];
+  getAsset?: (id: string) => AssetEntry | null;
+}
+
+export function generatePrefab(effectConfig: EffectConfig, ctx?: PrefabExportContext): PrefabExportResult {
   const config = effectConfig.config as Particle3DConfig;
   const name = effectConfig.name;
   const prefabUuid = effectConfig.id;
   const materialUuid = generateUUID();
-  const texture = buildDefaultTextureExport('particle-circle');
+
+  const getAsset = ctx?.getAsset ?? (() => null);
+  const textureAsset = ctx
+    ? resolveTextureAssetForExport(ctx.assetRefs, ctx.projectAssets ?? [])
+    : null;
+  const texture = textureAsset
+    ? buildTextureExportFromAsset(textureAsset)
+    : buildDefaultTextureExport('particle-circle');
+
+  const techIdx = resolveMaterialTechIdx(ctx?.assetRefs?.material, getAsset);
 
   const prefabContent = new CocosPrefabBuilder().build(
     config, name, materialUuid, texture.spriteFrameUuid
   );
   const metaContent = JSON.stringify(buildPrefabMeta(prefabUuid, name), null, 2);
   const materialContent = JSON.stringify(
-    buildParticleMaterial(texture.spriteFrameUuid), null, 2
+    buildParticleMaterial(texture.spriteFrameUuid, techIdx), null, 2
   );
   const materialMetaContent = JSON.stringify(buildMaterialMeta(materialUuid), null, 2);
 
@@ -47,12 +69,13 @@ export function generatePrefab(effectConfig: EffectConfig): PrefabExportResult {
 
 export async function exportToCocosProject(
   effectConfig: EffectConfig,
-  projectPath: string
+  projectPath: string,
+  ctx?: PrefabExportContext
 ): Promise<{ success: boolean; paths: string[]; error?: string }> {
   const {
     prefabContent, metaContent, materialContent, materialMetaContent,
     textureFileName, textureMetaContent, texturePngBase64
-  } = generatePrefab(effectConfig);
+  } = generatePrefab(effectConfig, ctx);
   const uuid = effectConfig.id;
   const name = effectConfig.name;
   const materialName = `${name}-particle`;

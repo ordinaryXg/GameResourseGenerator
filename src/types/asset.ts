@@ -15,6 +15,8 @@ export interface AssetEntry {
     uuid?: string;
     cocosMeta?: string;
     shape?: string;
+    textureId?: string;
+    blend?: string;
   };
 }
 

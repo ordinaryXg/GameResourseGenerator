@@ -2,8 +2,8 @@ import type { EffectGroupNode, EffectProject, ParticleEmitterNode, Transform3D }
 import { FX_PROJECT_VERSION } from '@/types/project';
 import { getDefaultParticle3DConfig, generateUUID } from './effect-defaults';
 
-import { createBuiltinAssetEntries, DEFAULT_TEXTURE_ASSET_ID } from '@/data/builtin-assets';
-export { DEFAULT_TEXTURE_ASSET_ID };
+import { createBuiltinAssetEntries, DEFAULT_TEXTURE_ASSET_ID, DEFAULT_MATERIAL_ASSET_ID } from '@/data/builtin-assets';
+export { DEFAULT_TEXTURE_ASSET_ID, DEFAULT_MATERIAL_ASSET_ID };
 
 export function createDefaultTransform(): Transform3D {
   return { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] };
@@ -21,7 +21,10 @@ export function createDefaultEmitter(name = 'Particle System'): ParticleEmitterN
     enabled: true,
     transform: createDefaultTransform(),
     config: getDefaultParticle3DConfig(),
-    assetRefs: { mainTexture: DEFAULT_TEXTURE_ASSET_ID }
+    assetRefs: {
+      mainTexture: DEFAULT_TEXTURE_ASSET_ID,
+      material: DEFAULT_MATERIAL_ASSET_ID
+    }
   };
 }
 

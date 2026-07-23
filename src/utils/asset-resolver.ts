@@ -1,6 +1,7 @@
 import type { AssetEntry } from '@/types/asset';
 import { getBuiltinShape } from '@/data/builtin-assets';
 import { createBuiltinTextureDataUrl } from '@/utils/builtin-texture-draw';
+import { assetCategoryIcon } from '@/data/builtin-assets';
 
 const dataUrlCache = new Map<string, string>();
 
@@ -9,7 +10,7 @@ export function resolveAssetUrl(entry: AssetEntry, projectDir?: string | null): 
   if (entry.uri.startsWith('data:') || entry.uri.startsWith('blob:')) {
     return entry.uri;
   }
-  if (entry.source === 'builtin' && entry.type === 'texture') {
+  if (entry.source === 'builtin' && (entry.type === 'texture' || entry.type === 'spriteFrame')) {
     const cached = dataUrlCache.get(entry.id);
     if (cached) return cached;
     const shape = getBuiltinShape(entry.id);

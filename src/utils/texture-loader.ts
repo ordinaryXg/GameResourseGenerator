@@ -49,6 +49,12 @@ export function disposeTextureCache() {
   loadingPromises.clear();
 }
 
+/** Detach shared map before dispose so cached textures stay valid. */
+export function disposeSpriteMaterial(material: THREE.SpriteMaterial) {
+  material.map = null;
+  material.dispose();
+}
+
 export function createFallbackParticleTexture(): THREE.Texture {
   const canvas = document.createElement('canvas');
   canvas.width = 32;

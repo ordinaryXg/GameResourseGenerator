@@ -84,7 +84,7 @@ function buildRealCurve(curve: CurveConfig): Record<string, unknown> {
 }
 
 /** Build a single cc.Material JSON object (NOT an array). */
-export function buildParticleMaterial(spriteFrameUuid?: string): Record<string, unknown> {
+export function buildParticleMaterial(spriteFrameUuid?: string, techIdx = 1): Record<string, unknown> {
   const props: Record<string, unknown> = {
     tintColor: { __type__: 'cc.Color', r: 255, g: 255, b: 255, a: 255 }
   };
@@ -97,7 +97,7 @@ export function buildParticleMaterial(spriteFrameUuid?: string): Record<string, 
     _objFlags: 0,
     _native: '',
     _effectAsset: { __uuid__: BUILTIN_PARTICLE_EFFECT_UUID },
-    _techIdx: 1,
+    _techIdx: techIdx,
     _defines: [{}],
     _states: [{
       rasterizerState: {},

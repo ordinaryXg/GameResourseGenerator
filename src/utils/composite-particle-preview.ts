@@ -9,8 +9,10 @@ import type { AssetEntry } from '@/types/asset';
 import {
   createFallbackParticleTexture,
   getCachedParticleTexture,
-  loadParticleTexture
+  loadParticleTexture,
+  disposeSpriteMaterial
 } from '@/utils/texture-loader';
+import { resolveParticleBlending } from '@/utils/material-blend';
 
 interface TaggedParticle {
   emitterId: string;
@@ -61,20 +63,16 @@ export class CompositeParticlePreview extends ParticlePreview {
         rotation: [...s.transform.rotation] as [number, number, number],
         scale: [...s.transform.scale] as [number, number, number],
       },
-      mainTextureAssetId: s.mainTextureAssetId
+      mainTextureAssetId: s.mainTextureAssetId,
+      materialAssetId: s.materialAssetId
     }));
 
     this.preloadTextures(normalized);
 
-    const sameIds = normalized.length === this.sources.length
-      && normalized.every((s, i) => {
-        const prev = this.sources[i];
-        return prev
-          && s.id === prev.id
-          && s.mainTextureAssetId === prev.mainTextureAssetId;
-      });
+    const sameStructure = normalized.length === this.sources.length
+      && normalized.every((s, i) => s.id === this.sources[i]?.id);
 
-    if (sameIds && normalized.length > 0) {
+    if (sameStructure && normalized.length > 0) {
       this.sources = normalized;
       for (const s of normalized) {
         const rt = this.runtimes.get(s.id);
@@ -104,7 +102,7 @@ export class CompositeParticlePreview extends ParticlePreview {
   protected resetSimulation() {
     for (const p of this.taggedParticles) {
       this.scene.remove(p.sprite);
-      p.material.dispose();
+      disposeSpriteMaterial(p.material);
     }
     this.taggedParticles = [];
     this.runtimes.clear();
@@ -179,7 +177,7 @@ export class CompositeParticlePreview extends ParticlePreview {
       p.life = p.elapsed / p.maxLife;
       if (p.life >= 1) {
         this.scene.remove(p.sprite);
-        p.material.dispose();
+        disposeSpriteMaterial(p.material);
         this.taggedParticles.splice(i, 1);
         continue;
       }
@@ -204,7 +202,7 @@ export class CompositeParticlePreview extends ParticlePreview {
     while (this.taggedParticles.length > this.maxTotalParticles) {
       const p = this.taggedParticles.shift()!;
       this.scene.remove(p.sprite);
-      p.material.dispose();
+      disposeSpriteMaterial(p.material);
     }
   }
 
@@ -213,7 +211,7 @@ export class CompositeParticlePreview extends ParticlePreview {
       const p = this.taggedParticles[i];
       if (p.emitterId === emitterId) {
         this.scene.remove(p.sprite);
-        p.material.dispose();
+        disposeSpriteMaterial(p.material);
         this.taggedParticles.splice(i, 1);
       }
     }
@@ -264,10 +262,16 @@ export class CompositeParticlePreview extends ParticlePreview {
     );
 
     const texture = this.getParticleTexture(source);
-    const useAdditive = cfg.rendererModule.renderMode !== 'billboard';
+    const blending = this.assetContext
+      ? resolveParticleBlending(
+        source.materialAssetId,
+        this.assetContext.getAsset,
+        cfg.rendererModule.renderMode
+      )
+      : (cfg.rendererModule.renderMode !== 'billboard' ? THREE.AdditiveBlending : THREE.NormalBlending);
     const material = new THREE.SpriteMaterial({
       map: texture,
-      blending: useAdditive ? THREE.AdditiveBlending : THREE.NormalBlending,
+      blending,
       depthWrite: false,
       depthTest: true,
       transparent: true,

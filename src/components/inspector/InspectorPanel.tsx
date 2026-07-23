@@ -8,6 +8,7 @@ import { TransformSection } from './TransformSection';
 import { AssetSlot } from './AssetSlot';
 import { findNodeById } from '@/utils/project-tree';
 import { isEmitterNode, isGroupNode } from '@/types/project';
+import { DEFAULT_TEXTURE_ASSET_ID, DEFAULT_MATERIAL_ASSET_ID } from '@/data/builtin-assets';
 
 interface SectionProps {
   id?: string;
@@ -103,7 +104,7 @@ export const InspectorPanel: React.FC = () => {
     project, selectedNodeId, currentEffect, updateEffectConfig,
     updateNodeTransform, setNodeEnabled, updateEmitterAssetRefs
   } = useProjectStore();
-  const { selectedModuleKey, setPendingAssetPick, setAssetBrowserVisible } = useAppStore();
+  const { selectedModuleKey } = useAppStore();
   const config = currentEffect?.config as Particle3DConfig | undefined;
   const selectedNode = project && selectedNodeId ? findNodeById(project.root, selectedNodeId) : null;
 
@@ -516,15 +517,31 @@ export const InspectorPanel: React.FC = () => {
           </>
         )}
         {isEmitterNode(selectedNode) && selectedNodeId && (
-          <AssetSlot
-            label="主贴图 (Main Texture)"
-            assetId={selectedNode.assetRefs.mainTexture}
-            onChange={(id) => updateEmitterAssetRefs(selectedNodeId, { mainTexture: id })}
-            onBrowse={() => {
-              setPendingAssetPick({ nodeId: selectedNodeId, slot: 'mainTexture' });
-              setAssetBrowserVisible(true);
-            }}
-          />
+          <>
+            <AssetSlot
+              slot="mainTexture"
+              label="主贴图 (Texture)"
+              assetId={selectedNode.assetRefs.mainTexture}
+              defaultAssetId={DEFAULT_TEXTURE_ASSET_ID}
+              onChange={(id) => updateEmitterAssetRefs(selectedNodeId, { mainTexture: id })}
+            />
+            <AssetSlot
+              slot="material"
+              label="材质 (Material)"
+              assetId={selectedNode.assetRefs.material}
+              defaultAssetId={DEFAULT_MATERIAL_ASSET_ID}
+              onChange={(id) => updateEmitterAssetRefs(selectedNodeId, { material: id })}
+            />
+            {config.rendererModule.renderMode === 'mesh' && (
+              <AssetSlot
+                slot="mesh"
+                label="网格 (Mesh)"
+                assetId={selectedNode.assetRefs.mesh}
+                defaultAssetId="builtin-mesh-quad"
+                onChange={(id) => updateEmitterAssetRefs(selectedNodeId, { mesh: id })}
+              />
+            )}
+          </>
         )}
       </Section>
     </div>

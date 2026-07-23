@@ -1,4 +1,5 @@
 import type { BuiltinTextureShape } from '@/data/builtin-assets';
+import { generateDefaultParticlePngBase64 } from '@/utils/default-particle-texture';
 
 export function drawBuiltinTexture(
   ctx: CanvasRenderingContext2D,
@@ -161,4 +162,12 @@ export function createBuiltinTextureDataUrl(shape: BuiltinTextureShape, size = 6
   const ctx = canvas.getContext('2d')!;
   drawBuiltinTexture(ctx, size, shape);
   return canvas.toDataURL('image/png');
+}
+
+/** PNG base64 for export (Node/Vitest falls back to default circle). */
+export function generateBuiltinTexturePngBase64(shape: BuiltinTextureShape, size = 64): string {
+  if (typeof document === 'undefined') {
+    return generateDefaultParticlePngBase64(size);
+  }
+  return createBuiltinTextureDataUrl(shape, size).split(',')[1];
 }

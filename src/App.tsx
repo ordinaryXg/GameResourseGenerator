@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '@/stores/app-store';
 import { useProjectStore } from '@/stores/project-store';
+import type { AssetEntry } from '@/types/asset';
+import { assetToEmitterRefsPatch } from '@/utils/asset-apply';
 import { findNodeById } from '@/utils/project-tree';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { NodeEditor } from '@/components/editor/NodeEditor';
@@ -25,8 +27,7 @@ const App: React.FC = () => {
     settingsOpen, exportOpen, showToast, isStreaming, activePanel,
     panelSizes, aiSettings, setEffectType, setPreviewVisible, setTemplateLibraryOpen,
     setSettingsOpen, setExportOpen, setActivePanel, adjustPanelSize, showToastMessage,
-    aiPanelVisible, setAiPanelVisible, assetBrowserVisible, setAssetBrowserVisible,
-    pendingAssetPick, setPendingAssetPick
+    aiPanelVisible, setAiPanelVisible, assetBrowserVisible, setAssetBrowserVisible
   } = useAppStore();
 
   const {
@@ -52,20 +53,24 @@ const App: React.FC = () => {
     handleFileChange: handleAssetImport
   } = useAssetImport();
 
-  const handleAssetSelect = useCallback((asset: { id: string }) => {
-    if (pendingAssetPick?.slot === 'mainTexture') {
-      updateEmitterAssetRefs(pendingAssetPick.nodeId, { mainTexture: asset.id });
-      setPendingAssetPick(null);
-      showToastMessage('已应用贴图');
+  const handleApplyAsset = useCallback((asset: AssetEntry) => {
+    if (!project || !selectedNodeId) {
+      showToastMessage('请先选中一个发射器');
+      return;
     }
-  }, [pendingAssetPick, updateEmitterAssetRefs, setPendingAssetPick, showToastMessage]);
-
-  const selectedEmitterTextureId = useMemo(() => {
-    if (!project || !selectedNodeId) return null;
     const node = findNodeById(project.root, selectedNodeId);
-    if (node && node.type === 'emitter') return node.assetRefs.mainTexture ?? null;
-    return null;
-  }, [project, selectedNodeId, project?.metadata.updatedAt]);
+    if (!node || node.type !== 'emitter') {
+      showToastMessage('请先选中一个发射器');
+      return;
+    }
+    const patch = assetToEmitterRefsPatch(asset);
+    if (!patch) {
+      showToastMessage(`无法应用 ${asset.type} 类型到发射器`);
+      return;
+    }
+    updateEmitterAssetRefs(selectedNodeId, patch);
+    showToastMessage(`已应用：${asset.name}`);
+  }, [project, selectedNodeId, updateEmitterAssetRefs, showToastMessage]);
 
   useAppShortcuts();
 
@@ -330,10 +335,7 @@ const App: React.FC = () => {
             flexShrink: 0,
             minHeight: 100
           }}>
-            <AssetBrowserPanel
-              selectedAssetId={selectedEmitterTextureId}
-              onSelectTexture={handleAssetSelect}
-            />
+            <AssetBrowserPanel onApplyAsset={handleApplyAsset} />
           </div>
         </>
       )}
