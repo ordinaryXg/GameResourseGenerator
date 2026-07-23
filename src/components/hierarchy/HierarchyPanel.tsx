@@ -29,12 +29,19 @@ interface TreeRowProps {
   onToggleEnabled: (id: string, enabled: boolean) => void;
   onContextMenuNode: (nodeId: string, e: React.MouseEvent) => void;
   onContextMenuModule: (nodeId: string, moduleKey: string, e: React.MouseEvent) => void;
+  dropTargetId: string | null;
+  onDragStartNode: (nodeId: string) => void;
+  onDragEndNode: () => void;
+  onDragOverGroup: (groupId: string) => void;
+  onDragLeaveGroup: () => void;
+  onDropOnGroup: (groupId: string, dragNodeId: string) => void;
 }
 
 const TreeRow: React.FC<TreeRowProps> = ({
   node, depth, rootId, selectedId, expanded, onToggleExpand, onSelect, onSelectModule,
   selectedModuleKey, showModules, onToggleEnabled,
-  onContextMenuNode, onContextMenuModule
+  onContextMenuNode, onContextMenuModule,
+  dropTargetId, onDragStartNode, onDragEndNode, onDragOverGroup, onDragLeaveGroup, onDropOnGroup
 }) => {
   const isGroup = isGroupNode(node);
   const isEmitter = isEmitterNode(node);
@@ -42,17 +49,46 @@ const TreeRow: React.FC<TreeRowProps> = ({
   const isOpen = expanded.has(node.id);
   const isSelected = selectedId === node.id;
   const canExpand = isGroup || isEmitter;
+  const isDropTarget = isGroup && dropTargetId === node.id;
+  const canDrag = !isRoot;
 
   return (
     <>
       <div
-        className={`tree-row${isSelected ? ' selected' : ''}`}
+        className={`tree-row${isSelected ? ' selected' : ''}${isDropTarget ? ' drop-target' : ''}`}
         style={{
           paddingLeft: 8 + depth * 14,
           fontSize: 12,
           minHeight: 26,
           cursor: 'pointer',
-          opacity: node.enabled ? 1 : 0.55
+          opacity: node.enabled ? 1 : 0.55,
+          outline: isDropTarget ? '1px dashed var(--accent)' : undefined,
+          background: isDropTarget ? 'rgba(56, 139, 253, 0.12)' : undefined
+        }}
+        draggable={canDrag}
+        onDragStart={(e) => {
+          if (!canDrag) return;
+          e.dataTransfer.setData('text/fx-node-id', node.id);
+          e.dataTransfer.effectAllowed = 'move';
+          onDragStartNode(node.id);
+        }}
+        onDragEnd={() => onDragEndNode()}
+        onDragOver={(e) => {
+          if (!isGroup) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          onDragOverGroup(node.id);
+        }}
+        onDragLeave={() => {
+          if (isGroup) onDragLeaveGroup();
+        }}
+        onDrop={(e) => {
+          if (!isGroup) return;
+          e.preventDefault();
+          e.stopPropagation();
+          const dragId = e.dataTransfer.getData('text/fx-node-id');
+          if (dragId) onDropOnGroup(node.id, dragId);
+          onDragLeaveGroup();
         }}
         onClick={() => onSelect(node.id)}
         onContextMenu={(e) => {
@@ -104,6 +140,12 @@ const TreeRow: React.FC<TreeRowProps> = ({
           onToggleEnabled={onToggleEnabled}
           onContextMenuNode={onContextMenuNode}
           onContextMenuModule={onContextMenuModule}
+          dropTargetId={dropTargetId}
+          onDragStartNode={onDragStartNode}
+          onDragEndNode={onDragEndNode}
+          onDragOverGroup={onDragOverGroup}
+          onDragLeaveGroup={onDragLeaveGroup}
+          onDropOnGroup={onDropOnGroup}
         />
       ))}
       {showModules && isEmitter && isOpen && MODULE_DEFS.map(mod => (
@@ -140,6 +182,31 @@ export const HierarchyPanel: React.FC = () => {
   const [search, setSearch] = useState('');
   const [menu, setMenu] = useState<HierarchyMenu | null>(null);
   const [renameTargetId, setRenameTargetId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+
+  const onDragStartNode = useCallback((_nodeId: string) => {
+    /* drag id carried in dataTransfer */
+  }, []);
+
+  const onDragEndNode = useCallback(() => {
+    setDropTargetId(null);
+  }, []);
+
+  const onDragOverGroup = useCallback((groupId: string) => {
+    setDropTargetId(groupId);
+  }, []);
+
+  const onDragLeaveGroup = useCallback(() => {
+    setDropTargetId(null);
+  }, []);
+
+  const onDropOnGroup = useCallback((groupId: string, dragNodeId: string) => {
+    if (!project) return;
+    if (dragNodeId === groupId || dragNodeId === project.root.id) return;
+    reparentNode(dragNodeId, groupId);
+    showToastMessage('已移动节点');
+    setDropTargetId(null);
+  }, [project, reparentNode, showToastMessage]);
 
   const toggleExpand = useCallback((id: string) => {
     setExpanded(prev => {
@@ -350,6 +417,12 @@ export const HierarchyPanel: React.FC = () => {
             onToggleEnabled={(id, enabled) => setNodeEnabled(id, enabled)}
             onContextMenuNode={handleContextMenuNode}
             onContextMenuModule={handleContextMenuModule}
+            dropTargetId={dropTargetId}
+            onDragStartNode={onDragStartNode}
+            onDragEndNode={onDragEndNode}
+            onDragOverGroup={onDragOverGroup}
+            onDragLeaveGroup={onDragLeaveGroup}
+            onDropOnGroup={onDropOnGroup}
           />
         )}
       </div>

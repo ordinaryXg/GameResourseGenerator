@@ -1,11 +1,14 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useAppStore } from '@/stores/app-store';
 import { useProjectStore } from '@/stores/project-store';
 import { generateId } from '@/utils/effect-defaults';
 import { generateEffect, buildSystemPrompt } from '@/utils/ai-engine';
+import { emitterToEffectConfig } from '@/utils/project-io';
+import { getStrictSelectedEmitter } from '@/utils/project-tree';
 import type { ChatMessage } from '@/types/effect';
+import type { EffectConfig } from '@/types/effect';
 
 export const ChatPanel: React.FC = () => {
   const {
@@ -14,19 +17,45 @@ export const ChatPanel: React.FC = () => {
   } = useAppStore();
 
   const {
-    messages, currentEffect, addMessage, setCurrentEffect, project
+    messages, currentEffect, addMessage, project, selectedNodeId,
+    applyAiEffectToSelectedEmitter
   } = useProjectStore();
 
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Welcome message
+  const selectedEmitter = useMemo(() => {
+    if (!project) return null;
+    return getStrictSelectedEmitter(project.root, selectedNodeId);
+  }, [project, selectedNodeId]);
+
+  const aiTargetEffect = useMemo((): EffectConfig | null => {
+    if (!project || !selectedEmitter) return null;
+    return emitterToEffectConfig(selectedEmitter, project);
+  }, [project, selectedEmitter]);
+
+  const resolveAiTarget = useCallback(() => {
+    if (!project) {
+      showToastMessage('请先打开或新建项目');
+      return null;
+    }
+    const emitter = getStrictSelectedEmitter(project.root, selectedNodeId);
+    if (!emitter) {
+      showToastMessage('请先在层级树选中一个粒子发射器');
+      return null;
+    }
+    return emitter;
+  }, [project, selectedNodeId, showToastMessage]);
+
   useEffect(() => {
     if (messages.length === 0 && project) {
+      const scopeHint = selectedEmitter
+        ? `\n\n当前作用对象：**${selectedEmitter.name}**`
+        : '\n\n请先在**层级树**选中一个粒子发射器，再描述要生成的效果。';
       const welcomeMsg = appMode === 'demo'
-        ? '👋 欢迎使用 **FX Studio 特效工坊**！\n\n当前为 **Demo 模式**，支持以下关键词：\n- 🔥 **火焰特效**\n- ❄️ **雪花飘落**\n- 🌧️ **下雨效果**\n- ✨ **魔法星光**\n- 💥 **爆炸效果**\n\n描述你想要的特效，或配置 API Key 切换到 AI 生成模式。'
-        : '👋 欢迎使用 **FX Studio 特效工坊**！\n\n用自然语言描述你想要的特效，AI 将为你生成粒子效果。';
+        ? `👋 欢迎使用 **FX Studio 特效工坊**！${scopeHint}\n\nDemo 模式关键词：火焰特效、雪花飘落、下雨效果、魔法星光、爆炸效果。`
+        : `👋 欢迎使用 **FX Studio 特效工坊**！${scopeHint}\n\n用自然语言描述特效，AI 将更新**当前选中的发射器**。`;
       addMessage({
         id: generateId(),
         role: 'assistant',
@@ -40,13 +69,22 @@ export const ChatPanel: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamingContent]);
 
+  const applyAiResult = useCallback((effectConfig: EffectConfig) => {
+    if (!applyAiEffectToSelectedEmitter(effectConfig)) {
+      showToastMessage('请先在层级树选中一个粒子发射器');
+      return false;
+    }
+    return true;
+  }, [applyAiEffectToSelectedEmitter, showToastMessage]);
+
   const handleSend = useCallback(async () => {
     const text = input.trim();
     if (!text || isStreaming) return;
 
+    if (!resolveAiTarget()) return;
+
     setInput('');
 
-    // Add user message
     const userMsg: ChatMessage = {
       id: generateId(),
       role: 'user',
@@ -55,13 +93,13 @@ export const ChatPanel: React.FC = () => {
     };
     addMessage(userMsg);
 
+    const baseEffect = aiTargetEffect ?? currentEffect;
+
     if (appMode === 'demo') {
-      // Demo mode
       setIsStreaming(true);
       setStreamingContent('');
 
-      // Simulate streaming
-      const result = await generateEffect(text, currentEffect, 'demo');
+      const result = await generateEffect(text, baseEffect, 'demo');
       const responseText = result.responseText;
 
       let streamedIdx = 0;
@@ -72,7 +110,6 @@ export const ChatPanel: React.FC = () => {
           appendStreamingContent(chunk);
         } else {
           clearInterval(streamInterval);
-          // Done
           const assistantMsg: ChatMessage = {
             id: generateId(),
             role: 'assistant',
@@ -82,11 +119,10 @@ export const ChatPanel: React.FC = () => {
           addMessage(assistantMsg);
           setStreamingContent('');
           setIsStreaming(false);
-          setCurrentEffect(result.effectConfig);
+          applyAiResult(result.effectConfig);
         }
       }, 20);
     } else {
-      // LLM mode - use IPC
       setIsStreaming(true);
       setStreamingContent('');
 
@@ -114,18 +150,16 @@ export const ChatPanel: React.FC = () => {
           setStreamingContent('');
           setIsStreaming(false);
 
-          // Try to parse JSON from response
           try {
             const jsonMatch = content.match(/```json\n([\s\S]*?)\n```/) || content.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
+            if (jsonMatch && baseEffect) {
               const parsed = JSON.parse(jsonMatch[1] || jsonMatch[0]);
-              if (currentEffect) {
-                setCurrentEffect({
-                  ...currentEffect,
-                  name: parsed.name || currentEffect.name,
-                  config: { ...currentEffect.config, ...parsed }
-                });
-              }
+              const nextEffect: EffectConfig = {
+                ...baseEffect,
+                name: parsed.name || baseEffect.name,
+                config: { ...baseEffect.config, ...parsed }
+              };
+              if (!applyAiResult(nextEffect)) return;
             }
           } catch {
             showToastMessage('AI 返回格式异常，请重试');
@@ -145,13 +179,18 @@ export const ChatPanel: React.FC = () => {
           temperature: aiSettings.temperature,
           maxTokens: aiSettings.maxTokens
         });
-      } catch (err: any) {
-        showToastMessage(`请求失败：${err.message}`);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        showToastMessage(`请求失败：${message}`);
         setIsStreaming(false);
         setStreamingContent('');
       }
     }
-  }, [input, isStreaming, appMode, currentEffect, aiSettings]);
+  }, [
+    input, isStreaming, appMode, aiTargetEffect, currentEffect, aiSettings, messages,
+    addMessage, resolveAiTarget, applyAiResult, showToastMessage,
+    setIsStreaming, setStreamingContent, appendStreamingContent
+  ]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -160,9 +199,21 @@ export const ChatPanel: React.FC = () => {
     }
   };
 
+  const canSend = !!selectedEmitter && !isStreaming && !!input.trim();
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* Messages */}
+      <div style={{
+        padding: '8px 12px',
+        borderBottom: '1px solid var(--border-color)',
+        fontSize: 11,
+        color: selectedEmitter ? 'var(--text-secondary)' : 'var(--warning, #d29922)'
+      }}>
+        {selectedEmitter
+          ? `🎯 作用对象：${selectedEmitter.name}`
+          : '⚠ 未选中发射器 — 请在层级树选中粒子系统后再生成'}
+      </div>
+
       <div style={{ flex: 1, overflow: 'auto', padding: '12px 16px' }}>
         {messages.map((msg) => (
           <div
@@ -185,7 +236,6 @@ export const ChatPanel: React.FC = () => {
           </div>
         ))}
 
-        {/* Streaming indicator */}
         {isStreaming && streamingContent && (
           <div style={{
             marginBottom: 16,
@@ -212,7 +262,6 @@ export const ChatPanel: React.FC = () => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
       <div style={{
         padding: '12px 16px',
         borderTop: '1px solid var(--border-color)'
@@ -223,11 +272,13 @@ export const ChatPanel: React.FC = () => {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={
-            appMode === 'demo'
-              ? '描述你想要的特效，如「火焰特效」「雪花飘落」...'
-              : '用自然语言描述你想要的特效...'
+            selectedEmitter
+              ? (appMode === 'demo'
+                ? `为「${selectedEmitter.name}」描述效果，如火焰、爆炸…`
+                : `为「${selectedEmitter.name}」描述粒子特效…`)
+              : '请先在层级树选中一个发射器…'
           }
-          disabled={isStreaming}
+          disabled={isStreaming || !selectedEmitter}
           rows={2}
           style={{
             width: '100%',
@@ -241,7 +292,7 @@ export const ChatPanel: React.FC = () => {
           <button
             className="primary"
             onClick={handleSend}
-            disabled={isStreaming || !input.trim()}
+            disabled={!canSend}
           >
             发送
           </button>

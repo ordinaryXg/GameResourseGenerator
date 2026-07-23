@@ -116,6 +116,14 @@ const App: React.FC = () => {
     setShowWelcome(true);
   }, [closeProject]);
 
+  const engineLabel = useMemo(() => {
+    const engine = project?.settings?.targetEngine ?? 'cocos-creator-3.8';
+    if (engine.includes('cocos')) return 'Cocos 3.8';
+    if (engine.includes('unity')) return 'Unity';
+    if (engine.includes('unreal')) return 'Unreal';
+    return engine;
+  }, [project?.settings?.targetEngine]);
+
   const selectedNodeName = useMemo(() => {
     if (!project || !selectedNodeId) return '无';
     const node = findNodeById(project.root, selectedNodeId);
@@ -375,6 +383,8 @@ const App: React.FC = () => {
         <span>属性：{inspectorLabel}</span>
         <span>|</span>
         <span>发射器：{currentEffect?.name || '无'}</span>
+        <span>|</span>
+        <span>引擎：{engineLabel}</span>
         <span>|</span>
         <span>类型：{effectType === 'particle3d' ? '3D 粒子' : effectType}</span>
         {aiPanelVisible && activePanel === 'ai' && (

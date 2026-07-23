@@ -60,6 +60,28 @@ export function getFirstEmitter(root: EffectGroupNode): ParticleEmitterNode | nu
   return first;
 }
 
+/** 仅当层级树明确选中发射器时返回（AI 等作用域用，不回退到第一个发射器）。 */
+export function getStrictSelectedEmitter(
+  root: EffectGroupNode,
+  selectedNodeId: string | null
+): ParticleEmitterNode | null {
+  if (!selectedNodeId) return null;
+  const node = findNodeById(root, selectedNodeId);
+  return node && isEmitterNode(node) ? node : null;
+}
+
+/** `searchId` 是否位于 `containerId` 子树内（含自身）。 */
+export function containsNodeId(
+  root: EffectGroupNode,
+  containerId: string,
+  searchId: string
+): boolean {
+  if (containerId === searchId) return true;
+  const container = findNodeById(root, containerId);
+  if (!container || !isGroupNode(container)) return false;
+  return !!findNodeInChildren(container.children, searchId);
+}
+
 export function updateNodeInTree(
   root: EffectGroupNode,
   nodeId: string,

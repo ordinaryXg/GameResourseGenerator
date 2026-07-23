@@ -18,7 +18,9 @@ import {
   cloneProject,
   cloneEffectNode,
   touchProjectMetadata,
-  findParentOfNode
+  findParentOfNode,
+  containsNodeId,
+  getStrictSelectedEmitter
 } from '@/utils/project-tree';
 import {
   serializeProject,
@@ -138,6 +140,7 @@ interface ProjectState {
   ) => void;
   duplicateAssetToProject: (sourceAssetId: string) => string;
 
+  applyAiEffectToSelectedEmitter: (effect: EffectConfig) => boolean;
   setCurrentEffect: (effect: EffectConfig | null) => void;
   updateEffectConfig: (updater: (prev: EffectConfig) => EffectConfig) => void;
   updateSelectedEmitterConfig: (updater: (cfg: Particle3DConfig) => Particle3DConfig) => void;
@@ -501,6 +504,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     if (!project || nodeId === project.root.id) return;
     const node = findNodeById(project.root, nodeId);
     if (!node) return;
+    const target = findNodeById(project.root, newParentGroupId);
+    if (!target || !isGroupNode(target)) return;
+    if (containsNodeId(project.root, nodeId, newParentGroupId)) return;
     const parentInfo = findParentOfNode(project.root, nodeId);
     if (!parentInfo) return;
     if (parentInfo.parent.id === newParentGroupId) return;
@@ -554,6 +560,24 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       isDirty: true,
       ...refreshBridge({ project: nextProject, selectedNodeId: updated.id })
     });
+  },
+
+  applyAiEffectToSelectedEmitter: (effect) => {
+    const { project, selectedNodeId, soloNodeId, undoStack, redoStack } = get();
+    if (!project || !effect) return false;
+    const emitter = getStrictSelectedEmitter(project.root, selectedNodeId);
+    if (!emitter) return false;
+    const history = nextHistoryStacks({ undoStack, redoStack }, project, selectedNodeId, soloNodeId);
+    const updated = applyEffectConfigToEmitter(emitter, effect);
+    const root = updateNodeInTree(project.root, updated.id, () => updated);
+    const nextProject = touchProjectMetadata({ ...project, root });
+    set({
+      ...history,
+      project: nextProject,
+      isDirty: true,
+      ...refreshBridge({ project: nextProject, selectedNodeId: updated.id })
+    });
+    return true;
   },
 
   updateEffectConfig: (updater) => {

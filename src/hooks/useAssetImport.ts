@@ -1,23 +1,16 @@
 import { useCallback, useRef } from 'react';
 import { useProjectStore } from '@/stores/project-store';
 import { useAppStore } from '@/stores/app-store';
-import { generateUUID } from '@/utils/effect-defaults';
-import type { AssetEntry } from '@/types/asset';
+import { buildImportedTextureEntry } from '@/utils/asset-filesystem';
 import { invalidateAssetUrlCache } from '@/utils/asset-resolver';
 import { invalidateThumbnailCache } from '@/utils/asset-thumbnail';
-
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-}
 
 export function useAssetImport() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importAsset = useProjectStore(s => s.importProjectAsset);
+  const project = useProjectStore(s => s.project);
+  const projectDir = useProjectStore(s => s.projectDir);
+  const projectPath = useProjectStore(s => s.projectPath);
   const { showToastMessage } = useAppStore();
 
   const openImportDialog = useCallback(() => {
@@ -35,25 +28,33 @@ export function useAssetImport() {
       return;
     }
 
+    if (!project) {
+      showToastMessage('请先打开项目');
+      return;
+    }
+
     try {
-      const dataUrl = await readFileAsDataUrl(file);
-      const baseName = file.name.replace(/\.[^.]+$/, '');
-      const entry: AssetEntry = {
-        id: generateUUID(),
-        name: baseName,
-        type: 'texture',
-        source: 'imported',
-        uri: dataUrl,
-        meta: { width: undefined, height: undefined }
-      };
+      const existingNames = project.assetRegistry
+        .filter(a => a.uri.startsWith('project://assets/textures/'))
+        .map(a => a.uri.replace('project://', '').split('/').pop()!)
+        .filter(Boolean);
+
+      let dir = projectDir;
+      if (!dir && projectPath) {
+        const sep = Math.max(projectPath.lastIndexOf('/'), projectPath.lastIndexOf('\\'));
+        dir = sep >= 0 ? projectPath.slice(0, sep) : null;
+      }
+
+      const entry = await buildImportedTextureEntry(file, dir, existingNames);
       importAsset(entry);
       invalidateAssetUrlCache();
       invalidateThumbnailCache();
-      showToastMessage(`已导入贴图：${baseName}`);
+      const saved = entry.uri.startsWith('project://');
+      showToastMessage(saved ? `已导入并保存：${entry.name}` : `已导入贴图：${entry.name}（保存项目后可落盘）`);
     } catch {
       showToastMessage('导入失败');
     }
-  }, [importAsset, showToastMessage]);
+  }, [importAsset, project, projectDir, projectPath, showToastMessage]);
 
   return { fileInputRef, openImportDialog, handleFileChange };
 }
