@@ -15,6 +15,7 @@ import {
   removeNodeFromTree,
   insertNodeInGroup,
   cloneProject,
+  cloneEffectNode,
   touchProjectMetadata,
   findParentOfNode
 } from '@/utils/project-tree';
@@ -115,6 +116,8 @@ interface ProjectState {
   setSoloNode: (nodeId: string | null) => void;
   updateNodeTransform: (nodeId: string, patch: Partial<import('@/types/project').Transform3D>) => void;
   reparentNode: (nodeId: string, newParentGroupId: string) => void;
+  duplicateNode: (nodeId: string) => string;
+  removeProjectAsset: (assetId: string) => void;
 
   setCurrentEffect: (effect: EffectConfig | null) => void;
   updateEffectConfig: (updater: (prev: EffectConfig) => EffectConfig) => void;
@@ -425,6 +428,28 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     });
   },
 
+  duplicateNode: (nodeId) => {
+    const { project, selectedNodeId, soloNodeId, undoStack, redoStack } = get();
+    if (!project || nodeId === project.root.id) return '';
+    const node = findNodeById(project.root, nodeId);
+    if (!node) return '';
+    const parentInfo = findParentOfNode(project.root, nodeId);
+    if (!parentInfo) return '';
+
+    const history = nextHistoryStacks({ undoStack, redoStack }, project, selectedNodeId, soloNodeId);
+    const clone = cloneEffectNode(node);
+    const root = insertNodeInGroup(project.root, parentInfo.parent.id, clone, parentInfo.index + 1);
+    const nextProject = touchProjectMetadata({ ...project, root });
+    set({
+      ...history,
+      project: nextProject,
+      selectedNodeId: clone.id,
+      isDirty: true,
+      ...refreshBridge({ project: nextProject, selectedNodeId: clone.id })
+    });
+    return clone.id;
+  },
+
   setCurrentEffect: (effect) => {
     const { project, selectedNodeId, soloNodeId, undoStack, redoStack } = get();
     if (!project || !effect) return;
@@ -506,6 +531,43 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       ...refreshBridge({ project: nextProject, selectedNodeId })
     });
     return entry.id;
+  },
+
+  removeProjectAsset: (assetId) => {
+    const { project, selectedNodeId, soloNodeId, undoStack, redoStack } = get();
+    if (!project) return;
+    const entry = project.assetRegistry.find(a => a.id === assetId);
+    if (!entry || entry.source === 'builtin') return;
+
+    const history = nextHistoryStacks({ undoStack, redoStack }, project, selectedNodeId, soloNodeId);
+    const registry = project.assetRegistry.filter(a => a.id !== assetId);
+
+    const clearRefs = (nodes: EffectNode[]): EffectNode[] =>
+      nodes.map(n => {
+        let next = n;
+        if (isEmitterNode(n)) {
+          const refs = { ...n.assetRefs };
+          let changed = false;
+          if (refs.mainTexture === assetId) { delete refs.mainTexture; changed = true; }
+          if (refs.material === assetId) { delete refs.material; changed = true; }
+          if (refs.mesh === assetId) { delete refs.mesh; changed = true; }
+          if (changed) next = { ...n, assetRefs: refs };
+        }
+        if (isGroupNode(next)) {
+          return { ...next, children: clearRefs(next.children) };
+        }
+        return next;
+      });
+
+    const root = { ...project.root, children: clearRefs(project.root.children) };
+    const nextProject = touchProjectMetadata({ ...project, root, assetRegistry: registry });
+    syncAssetStoreFromProject(registry);
+    set({
+      ...history,
+      project: nextProject,
+      isDirty: true,
+      ...refreshBridge({ project: nextProject, selectedNodeId })
+    });
   },
 
   addMessage: (msg) => set(s => ({ messages: [...s.messages, msg] })),

@@ -25,6 +25,8 @@ declare global {
       getApiKey: (provider: string) => Promise<string | null>;
       getPath: (name: string) => Promise<string>;
       getVersion: () => Promise<string>;
+      showItemInFolder: (path: string) => Promise<boolean>;
+      openPath: (path: string) => Promise<string | null>;
     };
   }
 }

@@ -311,6 +311,58 @@ button.danger {
   background: rgba(88, 166, 255, 0.12);
 }
 
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tree-row-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  flex-shrink: 0;
+  opacity: 0.45;
+  padding-right: 4px;
+}
+
+.tree-row:hover .tree-row-actions {
+  opacity: 1;
+}
+
+.tree-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tree-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.tree-icon-btn.is-off {
+  opacity: 0.45;
+}
+
 /* Panel headers & tabs */
 .panel-header {
   display: flex;
@@ -419,9 +471,15 @@ button.danger {
 }
 
 .context-menu-item.danger:hover:not(:disabled),
-.context-menu-item.danger:focus-visible {
-  background: rgba(248, 81, 73, 0.12);
-  color: var(--error);
+.context-menu-item.danger:focus-visible,
+.context-menu-item.danger:focus {
+  background: rgba(248, 81, 73, 0.2);
+  color: #fff;
+}
+
+.context-menu-item.danger:active:not(:disabled) {
+  background: var(--error);
+  color: #fff;
 }
 
 .context-menu-item:disabled {

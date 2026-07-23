@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, nativeImage } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, nativeImage, shell } from 'electron';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import { writeFile, mkdir, access, readFile } from 'fs/promises';
@@ -217,6 +217,16 @@ ipcMain.handle('app:getPath', async (_event, name: string) => {
 
 ipcMain.handle('app:getVersion', async () => {
   return app.getVersion();
+});
+
+ipcMain.handle('shell:showItemInFolder', async (_event, filePath: string) => {
+  shell.showItemInFolder(filePath);
+  return true;
+});
+
+ipcMain.handle('shell:openPath', async (_event, targetPath: string) => {
+  const err = await shell.openPath(targetPath);
+  return err || null;
 });
 
 // --- App Lifecycle ---

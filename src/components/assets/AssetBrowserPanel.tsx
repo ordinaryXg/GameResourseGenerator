@@ -1,6 +1,8 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import { useAssetStore } from '@/stores/asset-store';
 import { useProjectStore } from '@/stores/project-store';
+import { useAppStore } from '@/stores/app-store';
+import { ContextMenu } from '@/components/layout/ContextMenu';
 import { getAssetThumbnailUrl } from '@/utils/asset-thumbnail';
 import type { AssetEntry, AssetType } from '@/types/asset';
 import {
@@ -9,21 +11,32 @@ import {
 } from '@/data/builtin-assets';
 import { assetTypeLabel, writeAssetDragData } from '@/utils/asset-dnd';
 import { AssetDetailPanel } from '@/components/assets/AssetDetailPanel';
+import { openAssetInFolder, resolveAssetFilesystemTarget } from '@/utils/asset-filesystem';
+
+type AssetMenu =
+  | { kind: 'asset'; asset: AssetEntry; x: number; y: number }
+  | { kind: 'blank'; x: number; y: number };
 
 interface AssetBrowserPanelProps {
   onApplyAsset?: (asset: AssetEntry) => void;
+  onImportAsset?: () => void;
 }
 
 export const AssetBrowserPanel: React.FC<AssetBrowserPanelProps> = ({
-  onApplyAsset
+  onApplyAsset,
+  onImportAsset
 }) => {
   const [filter, setFilter] = useState('');
   const [category, setCategory] = useState<AssetType | 'all'>('all');
   const [sourceTab, setSourceTab] = useState<'all' | 'builtin' | 'project'>('all');
   const [focusedAssetId, setFocusedAssetId] = useState<string | null>(null);
+  const [menu, setMenu] = useState<AssetMenu | null>(null);
   const projectDir = useProjectStore(s => s.projectDir);
+  const projectPath = useProjectStore(s => s.projectPath);
+  const removeProjectAsset = useProjectStore(s => s.removeProjectAsset);
   const getMergedAssets = useAssetStore(s => s.getMergedAssets);
   const getAssetById = useAssetStore(s => s.getAssetById);
+  const { showToastMessage } = useAppStore();
 
   const assets = useMemo(() => {
     let list = getMergedAssets();
@@ -49,11 +62,72 @@ export const AssetBrowserPanel: React.FC<AssetBrowserPanelProps> = ({
     setFocusedAssetId(asset.id);
   }, []);
 
+  const copyText = useCallback(async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      showToastMessage(`已复制${label}`);
+    } catch {
+      showToastMessage('复制失败');
+    }
+  }, [showToastMessage]);
+
+  const menuItems = useMemo(() => {
+    if (!menu) return [];
+
+    if (menu.kind === 'blank') {
+      const items: { label: string; disabled?: boolean; onClick: () => void }[] = [];
+      if (onImportAsset) {
+        items.push({ label: '导入贴图', onClick: onImportAsset });
+      }
+      return items;
+    }
+
+    const { asset } = menu;
+    const isImported = asset.source !== 'builtin';
+    const canOpenFolder = !!resolveAssetFilesystemTarget(asset, projectDir, projectPath);
+    return [
+      {
+        label: '应用到当前发射器',
+        disabled: !onApplyAsset,
+        onClick: () => onApplyAsset?.(asset)
+      },
+      {
+        label: '在文件夹中显示',
+        disabled: !canOpenFolder,
+        onClick: () => {
+          void openAssetInFolder(asset, projectDir, projectPath).then(result => {
+            if (result === 'ok') showToastMessage('已打开文件夹');
+            else if (result === 'no-path') showToastMessage('内置资产无本地文件，请先保存项目');
+            else showToastMessage('当前环境不支持打开文件夹');
+          });
+        }
+      },
+      {
+        label: '复制名称',
+        onClick: () => { void copyText(asset.name, '名称'); }
+      },
+      {
+        label: '复制 ID',
+        onClick: () => { void copyText(asset.id, ' ID'); }
+      },
+      {
+        label: '删除资产',
+        disabled: !isImported,
+        danger: isImported,
+        onClick: () => {
+          removeProjectAsset(asset.id);
+          if (focusedAssetId === asset.id) setFocusedAssetId(null);
+          showToastMessage(`已删除：${asset.name}`);
+        }
+      }
+    ];
+  }, [menu, onApplyAsset, onImportAsset, copyText, removeProjectAsset, focusedAssetId, showToastMessage, projectDir, projectPath]);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       <div className="panel-header" style={{ gap: 6, flexWrap: 'wrap' }}>
         <span style={{ fontWeight: 600, fontSize: 12 }}>资产浏览器</span>
-        <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>单击查看 · 拖拽到槽位 · 双击应用</span>
+        <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>单击查看 · 拖拽到槽位 · 双击应用 · 右键菜单</span>
         <div style={{ flex: 1 }} />
         {(['all', 'builtin', 'project'] as const).map(tab => (
           <button
@@ -99,26 +173,40 @@ export const AssetBrowserPanel: React.FC<AssetBrowserPanelProps> = ({
           ))}
         </div>
 
-        <div style={{
-          flex: 1,
-          overflow: 'auto',
-          padding: 8,
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(76px, 1fr))',
-          gap: 8,
-          alignContent: 'start'
-        }}>
+        <div
+          style={{
+            flex: 1,
+            overflow: 'auto',
+            padding: 8,
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(76px, 1fr))',
+            gap: 8,
+            alignContent: 'start'
+          }}
+          onContextMenu={(e) => {
+            if ((e.target as HTMLElement).closest('[data-asset-item]')) return;
+            e.preventDefault();
+            setMenu({ kind: 'blank', x: e.clientX, y: e.clientY });
+          }}
+        >
           {assets.map(asset => {
             const thumb = getAssetThumbnailUrl(asset, projectDir, 64);
             const selected = focusedAssetId === asset.id;
             return (
               <div
                 key={asset.id}
+                data-asset-item
                 draggable
                 onClick={() => handleSelect(asset)}
                 onDragStart={(e) => handleDragStart(e, asset)}
                 onDoubleClick={() => onApplyAsset?.(asset)}
-                title={`${asset.name}\n单击查看属性 · 拖拽到 Inspector · 双击应用`}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setFocusedAssetId(asset.id);
+                  setMenu({ kind: 'asset', asset, x: e.clientX, y: e.clientY });
+                }}
+                title={`${asset.name}\n单击查看属性 · 拖拽到 Inspector · 双击应用 · 右键菜单`}
                 style={{
                   display: 'flex',
                   flexDirection: 'column',
@@ -180,6 +268,10 @@ export const AssetBrowserPanel: React.FC<AssetBrowserPanelProps> = ({
           linkedTextureName={linkedTextureName}
         />
       </div>
+
+      {menu && menuItems.length > 0 && (
+        <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={() => setMenu(null)} />
+      )}
     </div>
   );
 };

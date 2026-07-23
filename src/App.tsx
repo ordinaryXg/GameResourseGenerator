@@ -335,7 +335,7 @@ const App: React.FC = () => {
             flexShrink: 0,
             minHeight: 100
           }}>
-            <AssetBrowserPanel onApplyAsset={handleApplyAsset} />
+            <AssetBrowserPanel onApplyAsset={handleApplyAsset} onImportAsset={openAssetImport} />
           </div>
         </>
       )}

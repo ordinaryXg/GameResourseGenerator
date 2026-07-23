@@ -3,11 +3,12 @@ import React, { useEffect, useRef } from 'react';
 interface RenameModalProps {
   open: boolean;
   initialName: string;
+  title?: string;
   onConfirm: (name: string) => void;
   onClose: () => void;
 }
 
-export const RenameModal: React.FC<RenameModalProps> = ({ open, initialName, onConfirm, onClose }) => {
+export const RenameModal: React.FC<RenameModalProps> = ({ open, initialName, title = '重命名', onConfirm, onClose }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [name, setName] = React.useState(initialName);
 
@@ -23,7 +24,7 @@ export const RenameModal: React.FC<RenameModalProps> = ({ open, initialName, onC
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ minWidth: 360 }}>
-        <h2>重命名特效</h2>
+        <h2>{title}</h2>
         <input
           ref={inputRef}
           value={name}

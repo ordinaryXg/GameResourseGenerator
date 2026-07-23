@@ -3,6 +3,9 @@ import type { AssetEntry } from '@/types/asset';
 import { getAssetThumbnailUrl } from '@/utils/asset-thumbnail';
 import { buildAssetInfoView } from '@/utils/asset-info';
 import { assetCategoryIcon } from '@/data/builtin-assets';
+import { MaterialAssetView } from '@/components/assets/MaterialAssetView';
+import { ShaderAssetView } from '@/components/assets/ShaderAssetView';
+import { MeshPreviewView } from '@/components/assets/MeshPreviewView';
 
 interface AssetDetailPanelProps {
   asset: AssetEntry | null;
@@ -18,7 +21,7 @@ export const AssetDetailPanel: React.FC<AssetDetailPanelProps> = ({
   if (!asset) {
     return (
       <div style={{
-        width: 220,
+        width: 240,
         flexShrink: 0,
         borderLeft: '1px solid var(--border-color)',
         padding: 12,
@@ -40,7 +43,7 @@ export const AssetDetailPanel: React.FC<AssetDetailPanelProps> = ({
 
   return (
     <div style={{
-      width: 220,
+      width: 240,
       flexShrink: 0,
       borderLeft: '1px solid var(--border-color)',
       padding: 10,
@@ -71,6 +74,27 @@ export const AssetDetailPanel: React.FC<AssetDetailPanelProps> = ({
           <div style={{ color: 'var(--accent)', fontSize: 11, marginTop: 2 }}>{info.typeLabel}</div>
         </div>
       </div>
+
+      {asset.type === 'material' && (
+        <Section title="材质预览">
+          <MaterialAssetView asset={asset} />
+        </Section>
+      )}
+
+      {asset.type === 'shader' && (
+        <Section title="Shader 预览">
+          <ShaderAssetView asset={asset} />
+        </Section>
+      )}
+
+      {asset.type === 'mesh' && (
+        <Section title="模型预览">
+          <MeshPreviewView asset={asset} />
+          <p style={{ margin: '8px 0 0', color: 'var(--text-secondary)', lineHeight: 1.55, fontSize: 11 }}>
+            网格用于粒子渲染模式 Mesh。导出时引用对应 .mesh 资源。
+          </p>
+        </Section>
+      )}
 
       <Section title="说明">
         <p style={{ margin: 0, color: 'var(--text-secondary)', lineHeight: 1.55, fontSize: 11 }}>

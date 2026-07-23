@@ -1,5 +1,6 @@
 import type { EffectNode, EffectGroupNode, EffectProject, ParticleEmitterNode } from '@/types/project';
 import { isGroupNode, isEmitterNode } from '@/types/project';
+import { generateUUID } from './effect-defaults';
 
 export function findNodeById(root: EffectGroupNode, id: string): EffectNode | null {
   if (root.id === id) return root;
@@ -112,6 +113,22 @@ export function insertNodeInGroup(
     children.splice(at, 0, node);
     return { ...n, children };
   }) as EffectGroupNode;
+}
+
+export function cloneEffectNode(node: EffectNode, nameSuffix = ' (1)'): EffectNode {
+  const raw = JSON.parse(JSON.stringify(node)) as EffectNode;
+  const reid = (n: EffectNode): EffectNode => {
+    if (isGroupNode(n)) {
+      return {
+        ...n,
+        id: generateUUID(),
+        name: `${n.name}${nameSuffix}`,
+        children: n.children.map(reid)
+      };
+    }
+    return { ...n, id: generateUUID(), name: `${n.name}${nameSuffix}` };
+  };
+  return reid(raw);
 }
 
 export function cloneProject(project: EffectProject): EffectProject {
