@@ -137,11 +137,15 @@ export abstract class BaseParticlePreview {
     this.burstsTriggered.clear();
   }
 
+  protected canSimulate(): boolean {
+    return this.config !== null;
+  }
+
   private start() {
     if (!this.renderer) return;
     const animate = () => {
       this.animationId = requestAnimationFrame(animate);
-      if (this.isPlaying && this.config) this.update(0.016);
+      if (this.isPlaying && this.canSimulate()) this.update(0.016);
       this.renderer!.render(this.scene, this.getCamera());
     };
     animate();

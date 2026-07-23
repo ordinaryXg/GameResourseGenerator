@@ -39,7 +39,7 @@ export const PreviewPanel: React.FC = () => {
   const previewSources = useMemo(() => {
     if (!project || effectType !== 'particle3d') return [];
     return collectEmitterPreviewSources(project.root, { soloId: soloNodeId });
-  }, [project, soloNodeId, effectType]);
+  }, [project, soloNodeId, effectType, project?.metadata.updatedAt]);
   useEffect(() => {
     previewRef.current = getPreview(effectType);
   }, [effectType]);

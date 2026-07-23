@@ -34,7 +34,7 @@ export class CompositeParticlePreview extends ParticlePreview {
   private maxTotalParticles = 800;
 
   setEmitters(sources: EmitterPreviewSource[]) {
-    this.sources = sources.map(s => ({
+    const normalized = sources.map(s => ({
       id: s.id,
       enabled: s.enabled,
       config: JSON.parse(JSON.stringify(s.config)),
@@ -44,8 +44,26 @@ export class CompositeParticlePreview extends ParticlePreview {
         scale: [...s.transform.scale] as [number, number, number]
       }
     }));
+
+    const sameIds = normalized.length === this.sources.length
+      && normalized.every((s, i) => s.id === this.sources[i]?.id);
+
+    if (sameIds && normalized.length > 0) {
+      this.sources = normalized;
+      for (const s of normalized) {
+        const rt = this.runtimes.get(s.id);
+        if (rt) rt.source = s;
+      }
+      return;
+    }
+
+    this.sources = normalized;
     this.resetSimulation();
     this.play();
+  }
+
+  protected canSimulate(): boolean {
+    return this.sources.length > 0;
   }
 
   setConfig(_config: Particle3DConfig) {

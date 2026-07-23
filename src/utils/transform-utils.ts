@@ -39,7 +39,7 @@ export function applyTransformToPoint(t: Transform3D, local: THREE.Vector3): THR
 
 export function applyTransformToDirection(t: Transform3D, dir: THREE.Vector3): THREE.Vector3 {
   const mat = transformToMatrix(t);
-  const origin = new THREE.Vector3();
-  const transformed = dir.clone().applyMatrix4(mat).sub(origin.applyMatrix4(mat));
-  return transformed.normalize().multiplyScalar(dir.length());
+  const len = dir.length();
+  if (len === 0) return dir.clone();
+  return dir.clone().transformDirection(mat).normalize().multiplyScalar(len);
 }

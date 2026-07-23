@@ -23,19 +23,20 @@ function Vec3Input({
       <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>{label}</label>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
         {axes.map((axis, i) => (
-          <input
-            key={axis}
-            type="number"
-            step={step}
-            value={value[i]}
-            onChange={(e) => {
-              const next = [...value] as [number, number, number];
-              next[i] = parseFloat(e.target.value) || 0;
-              onChange(next);
-            }}
-            placeholder={axis}
-            style={{ width: '100%', padding: '4px 6px', fontSize: 11 }}
-          />
+          <div key={axis}>
+            <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{axis}</span>
+            <input
+              type="number"
+              step={step}
+              value={Number.isFinite(value[i]) ? value[i] : 0}
+              onChange={(e) => {
+                const next: [number, number, number] = [value[0], value[1], value[2]];
+                next[i] = parseFloat(e.target.value) || 0;
+                onChange(next);
+              }}
+              style={{ width: '100%', padding: '4px 6px', fontSize: 11 }}
+            />
+          </div>
         ))}
       </div>
     </div>
