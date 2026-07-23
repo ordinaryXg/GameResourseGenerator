@@ -145,6 +145,75 @@ export function generateProjectPrefab(
   };
 }
 
+export type ExportManifestCategory = 'prefab' | 'texture' | 'material';
+
+export interface ExportManifestItem {
+  category: ExportManifestCategory;
+  fileName: string;
+  metaFileName: string;
+  detail?: string;
+}
+
+export interface ProjectExportManifest {
+  prefabName: string;
+  targetSubdir: string;
+  items: ExportManifestItem[];
+  emitterSummaries: ExportAssetSummary[];
+  emitterCount: number;
+  uniqueTextureCount: number;
+  uniqueMaterialCount: number;
+  totalFileCount: number;
+}
+
+/** 导出前资产/文件清单（供 ExportModal 与测试使用）。 */
+export function buildProjectExportManifest(
+  project: EffectProject,
+  ctx?: ProjectExportContext
+): ProjectExportManifest {
+  const preview = generateProjectPrefab(project, ctx);
+  const items: ExportManifestItem[] = [
+    {
+      category: 'prefab',
+      fileName: `${project.name}.prefab`,
+      metaFileName: `${project.name}.prefab.meta`,
+      detail: `${preview.emitterCount} 个 ParticleSystem`
+    }
+  ];
+
+  let textureCount = 0;
+  let materialCount = 0;
+  for (const asset of preview.assetFiles) {
+    if (asset.fileName.endsWith('.mtl')) {
+      materialCount += 1;
+      items.push({
+        category: 'material',
+        fileName: asset.fileName,
+        metaFileName: asset.metaFileName,
+        detail: '粒子材质'
+      });
+    } else {
+      textureCount += 1;
+      items.push({
+        category: 'texture',
+        fileName: asset.fileName,
+        metaFileName: asset.metaFileName,
+        detail: '主贴图'
+      });
+    }
+  }
+
+  return {
+    prefabName: project.name,
+    targetSubdir: `assets/effects/${project.id}/`,
+    items,
+    emitterSummaries: preview.emitterSummaries,
+    emitterCount: preview.emitterCount,
+    uniqueTextureCount: textureCount,
+    uniqueMaterialCount: materialCount,
+    totalFileCount: items.reduce((n, item) => n + 2, 0)
+  };
+}
+
 export async function exportProjectToCocos(
   project: EffectProject,
   projectPath: string,

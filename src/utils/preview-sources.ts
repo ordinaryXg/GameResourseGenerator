@@ -58,3 +58,10 @@ export function getEmitterNodes(root: EffectGroupNode): ParticleEmitterNode[] {
   walk(root.children);
   return nodes;
 }
+
+/** 估算同屏预览粒子容量上限（各发射器 mainModule.capacity 之和）。 */
+export function estimatePreviewParticleBudget(
+  sources: EmitterPreviewSource[]
+): number {
+  return sources.reduce((sum, source) => sum + (source.config.mainModule?.capacity ?? 0), 0);
+}

@@ -6,7 +6,8 @@ import {
   exportProjectToCocos,
   exportToCocosProject,
   generateProjectPrefab,
-  generatePrefab
+  generatePrefab,
+  buildProjectExportManifest
 } from '@/utils/export-pipeline';
 import { getCompatibilityReport, exportToEngine } from '@/utils/multi-engine-export';
 import type { TargetEngine } from '@/utils/multi-engine-export';
@@ -41,6 +42,11 @@ export const ExportModal: React.FC = () => {
   const projectPreview = useMemo(() => {
     if (!project || targetEngine !== 'cocos') return null;
     return generateProjectPrefab(project, projectExportContext);
+  }, [project, projectExportContext, targetEngine]);
+
+  const exportManifest = useMemo(() => {
+    if (!project || targetEngine !== 'cocos') return null;
+    return buildProjectExportManifest(project, projectExportContext);
   }, [project, projectExportContext, targetEngine]);
 
   const compatibility = currentEffect && targetEngine !== 'cocos'
@@ -93,7 +99,6 @@ export const ExportModal: React.FC = () => {
   if (!project && !currentEffect) return null;
 
   const exportName = project?.name ?? currentEffect!.name;
-  const exportId = project?.id ?? currentEffect!.id;
 
   return (
     <div className="modal-overlay" onClick={() => setExportOpen(false)}>
@@ -155,6 +160,62 @@ export const ExportModal: React.FC = () => {
           </div>
         </div>
 
+        {exportManifest && (
+          <div style={{
+            marginBottom: 16,
+            padding: 12,
+            background: 'var(--bg-tertiary)',
+            borderRadius: 'var(--radius-md)',
+            fontSize: 12
+          }}>
+            <div style={{ fontWeight: 600, marginBottom: 8 }}>
+              导出资产清单
+              <span style={{ fontWeight: 400, color: 'var(--text-secondary)', marginLeft: 8 }}>
+                {exportManifest.emitterCount} 发射器 · {exportManifest.totalFileCount} 个文件
+              </span>
+            </div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+              <thead>
+                <tr style={{ color: 'var(--text-secondary)', textAlign: 'left' }}>
+                  <th style={{ padding: '4px 6px' }}>类型</th>
+                  <th style={{ padding: '4px 6px' }}>文件</th>
+                  <th style={{ padding: '4px 6px' }}>说明</th>
+                </tr>
+              </thead>
+              <tbody>
+                {exportManifest.items.map((item) => (
+                  <tr key={item.fileName} style={{ borderTop: '1px solid var(--border-color)' }}>
+                    <td style={{ padding: '4px 6px', whiteSpace: 'nowrap' }}>
+                      {item.category === 'prefab' ? 'Prefab' : item.category === 'texture' ? '贴图' : '材质'}
+                    </td>
+                    <td style={{ padding: '4px 6px', wordBreak: 'break-all' }}>
+                      {item.fileName}
+                      <div style={{ color: 'var(--text-secondary)' }}>{item.metaFileName}</div>
+                    </td>
+                    <td style={{ padding: '4px 6px', color: 'var(--text-secondary)' }}>{item.detail ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {exportManifest.emitterSummaries.length > 0 && (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontWeight: 600, marginBottom: 4 }}>发射器引用</div>
+                {exportManifest.emitterSummaries.map((summary, i) => (
+                  <div key={i} style={{ marginBottom: 2, color: 'var(--text-secondary)' }}>
+                    贴图 {summary.textureAssetName} · 材质 {summary.materialName}（{summary.materialBlend}）
+                  </div>
+                ))}
+              </div>
+            )}
+            {projectPath && (
+              <div style={{ marginTop: 8, color: 'var(--text-secondary)' }}>
+                目标目录：{projectPath}/{exportManifest.targetSubdir}
+              </div>
+            )}
+          </div>
+        )}
+
+        {!exportManifest && (
         <div style={{ marginBottom: 16, fontSize: 13, color: 'var(--text-secondary)' }}>
           <div>导出文件：</div>
           <div>• {exportName}.prefab</div>
@@ -171,30 +232,8 @@ export const ExportModal: React.FC = () => {
               <div>• {generatePrefab(currentEffect).textureFileName}</div>
             </>
           )}
-          {projectPreview && projectPreview.emitterSummaries.length > 0 && (
-            <div style={{
-              marginTop: 8,
-              padding: 8,
-              background: 'var(--bg-tertiary)',
-              borderRadius: 6,
-              fontSize: 12
-            }}>
-              <div style={{ fontWeight: 600, marginBottom: 4, color: 'var(--text-primary)' }}>
-                资产清单（{projectPreview.emitterCount} 个发射器）
-              </div>
-              {projectPreview.emitterSummaries.map((summary, i) => (
-                <div key={i} style={{ marginBottom: 4 }}>
-                  贴图 {summary.textureAssetName} · 材质 {summary.materialName}（{summary.materialBlend}）
-                </div>
-              ))}
-            </div>
-          )}
-          {projectPath && (
-            <div style={{ marginTop: 4 }}>
-              目标路径：assets/effects/{exportId.substring(0, 8)}-/
-            </div>
-          )}
         </div>
+        )}
         </>)}
 
         <div style={{ marginBottom: 16 }}>

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "test": "vitest run",
     "preview": "vite preview",
     "electron:build": "vite build && electron-builder",
     "generate:builtin": "node scripts/generate-builtin-assets.mjs"
