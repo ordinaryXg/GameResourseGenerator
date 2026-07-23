@@ -27,6 +27,8 @@ import {
   getProjectDirFromFilePath
 } from '@/utils/project-io';
 import { generateUUID } from '@/utils/effect-defaults';
+import type { AssetEntry } from '@/types/asset';
+import type { EmitterAssetRefs } from '@/types/asset';
 import {
   createSnapshot,
   pushUndoSnapshot,
@@ -36,6 +38,7 @@ import {
   type EditorSnapshot,
   type HistoryStacks
 } from '@/utils/project-history';
+import { syncAssetStoreFromProject } from '@/stores/asset-store';
 
 const RECENT_KEY = 'fx-studio-recent-projects';
 const AUTOSAVE_KEY = 'fx-studio-autosave';
@@ -116,6 +119,8 @@ interface ProjectState {
   setCurrentEffect: (effect: EffectConfig | null) => void;
   updateEffectConfig: (updater: (prev: EffectConfig) => EffectConfig) => void;
   updateSelectedEmitterConfig: (updater: (cfg: Particle3DConfig) => Particle3DConfig) => void;
+  updateEmitterAssetRefs: (nodeId: string, patch: Partial<EmitterAssetRefs>) => void;
+  importProjectAsset: (entry: AssetEntry) => string;
   addMessage: (msg: ChatMessage) => void;
 
   syncAutosave: () => void;
@@ -183,6 +188,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       ...emptyHistoryStacks(),
       ...refreshBridge({ project, selectedNodeId: first?.id ?? null })
     });
+    syncAssetStoreFromProject(project.assetRegistry);
   },
 
   loadProjectData: (project, path = null) => {
@@ -190,8 +196,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     const projectDir = path ? getProjectDirFromFilePath(path) : null;
     const selectedNodeId = first?.id ?? null;
     if (path) pushRecent(path);
+    const cloned = cloneProject(project);
+    syncAssetStoreFromProject(cloned.assetRegistry);
     set({
-      project: cloneProject(project),
+      project: cloned,
       projectPath: path,
       projectDir,
       selectedNodeId,
@@ -457,6 +465,47 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       ...prev,
       config: updater(prev.config as Particle3DConfig)
     }));
+  },
+
+  updateEmitterAssetRefs: (nodeId, patch) => {
+    const { project, selectedNodeId, soloNodeId, undoStack, redoStack } = get();
+    if (!project) return;
+    const node = findNodeById(project.root, nodeId);
+    if (!node || !isEmitterNode(node)) return;
+    const history = nextHistoryStacks({ undoStack, redoStack }, project, selectedNodeId, soloNodeId);
+    const root = updateNodeInTree(project.root, nodeId, n => {
+      if (!isEmitterNode(n)) return n;
+      return {
+        ...n,
+        assetRefs: {
+          ...n.assetRefs,
+          ...patch
+        }
+      };
+    });
+    const nextProject = touchProjectMetadata({ ...project, root });
+    set({
+      ...history,
+      project: nextProject,
+      isDirty: true,
+      ...refreshBridge({ project: nextProject, selectedNodeId })
+    });
+  },
+
+  importProjectAsset: (entry) => {
+    const { project, selectedNodeId, soloNodeId, undoStack, redoStack } = get();
+    if (!project) return '';
+    const history = nextHistoryStacks({ undoStack, redoStack }, project, selectedNodeId, soloNodeId);
+    const registry = [...project.assetRegistry.filter(a => a.id !== entry.id), entry];
+    const nextProject = touchProjectMetadata({ ...project, assetRegistry: registry });
+    syncAssetStoreFromProject(registry);
+    set({
+      ...history,
+      project: nextProject,
+      isDirty: true,
+      ...refreshBridge({ project: nextProject, selectedNodeId })
+    });
+    return entry.id;
   },
 
   addMessage: (msg) => set(s => ({ messages: [...s.messages, msg] })),

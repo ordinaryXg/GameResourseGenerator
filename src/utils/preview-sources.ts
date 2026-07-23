@@ -8,6 +8,7 @@ export interface EmitterPreviewSource {
   config: Particle3DConfig;
   transform: Transform3D;
   enabled: boolean;
+  mainTextureAssetId?: string;
 }
 
 export function collectEmitterPreviewSources(
@@ -28,7 +29,8 @@ export function collectEmitterPreviewSources(
           id: node.id,
           config: node.config,
           transform: world,
-          enabled: node.enabled
+          enabled: node.enabled,
+          mainTextureAssetId: node.assetRefs.mainTexture
         });
       } else if (isGroupNode(node)) {
         if (!node.enabled && !includeDisabled) continue;

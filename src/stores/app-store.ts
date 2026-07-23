@@ -8,6 +8,7 @@ interface PanelSizes {
   left: number;
   right: number;
   preview: number;
+  assets: number;
 }
 
 const PANEL_SIZES_KEY = 'fx-studio-panel-sizes';
@@ -16,9 +17,17 @@ const PREVIEW_BG_KEY = 'fx-studio-preview-bg';
 function loadPanelSizes(): PanelSizes {
   try {
     const raw = localStorage.getItem(PANEL_SIZES_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<PanelSizes>;
+      return {
+        left: parsed.left ?? 300,
+        right: parsed.right ?? 280,
+        preview: parsed.preview ?? 280,
+        assets: parsed.assets ?? 180
+      };
+    }
   } catch { /* ignore */ }
-  return { left: 300, right: 280, preview: 280 };
+  return { left: 300, right: 280, preview: 280, assets: 180 };
 }
 
 function loadPreviewBackground(): string {
@@ -56,6 +65,8 @@ interface AppState {
   lang: Lang;
   newEffectModalOpen: boolean;
   aiPanelVisible: boolean;
+  assetBrowserVisible: boolean;
+  pendingAssetPick: { nodeId: string; slot: 'mainTexture' } | null;
 
   setAISettings: (s: Partial<AISettings>) => void;
   setAppMode: (m: AppMode) => void;
@@ -79,6 +90,8 @@ interface AppState {
   setLang: (l: Lang) => void;
   setNewEffectModalOpen: (v: boolean) => void;
   setAiPanelVisible: (v: boolean) => void;
+  setAssetBrowserVisible: (v: boolean) => void;
+  setPendingAssetPick: (v: { nodeId: string; slot: 'mainTexture' } | null) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -102,6 +115,8 @@ export const useAppStore = create<AppState>((set) => ({
   lang: 'zh',
   newEffectModalOpen: false,
   aiPanelVisible: false,
+  assetBrowserVisible: true,
+  pendingAssetPick: null,
 
   setAISettings: (s) => set(state => ({ aiSettings: { ...state.aiSettings, ...s }, appMode: s.apiKey !== undefined ? (s.apiKey ? 'llm' : 'demo') : state.appMode })),
   setAppMode: (m) => set({ appMode: m }),
@@ -120,15 +135,16 @@ export const useAppStore = create<AppState>((set) => ({
   setActivePanel: (p) => set({ activePanel: p }),
   setSelectedModuleKey: (key) => set({ selectedModuleKey: key }),
   adjustPanelSize: (key, delta) => set(s => {
-    const min = key === 'preview' ? 120 : 200;
-    const max = key === 'preview' ? 520 : 560;
+    const min = key === 'preview' ? 120 : key === 'assets' ? 100 : 200;
+    const max = key === 'preview' ? 520 : key === 'assets' ? 360 : 560;
     const next = Math.min(max, Math.max(min, s.panelSizes[key] + delta));
     const panelSizes = { ...s.panelSizes, [key]: next };
     localStorage.setItem(PANEL_SIZES_KEY, JSON.stringify(panelSizes));
     return { panelSizes };
   }),
   setPanelSize: (key, value) => set(s => {
-    const panelSizes = { ...s.panelSizes, [key]: Math.max(key === 'preview' ? 120 : 200, value) };
+    const min = key === 'preview' ? 120 : key === 'assets' ? 100 : 200;
+    const panelSizes = { ...s.panelSizes, [key]: Math.max(min, value) };
     localStorage.setItem(PANEL_SIZES_KEY, JSON.stringify(panelSizes));
     return { panelSizes };
   }),
@@ -138,5 +154,7 @@ export const useAppStore = create<AppState>((set) => ({
   showToastMessage: (msg) => { set({ showToast: msg }); setTimeout(() => set({ showToast: null }), 3000); },
   setLang: (l) => set({ lang: l }),
   setNewEffectModalOpen: (v) => set({ newEffectModalOpen: v }),
-  setAiPanelVisible: (v) => set({ aiPanelVisible: v })
+  setAiPanelVisible: (v) => set({ aiPanelVisible: v }),
+  setAssetBrowserVisible: (v) => set({ assetBrowserVisible: v }),
+  setPendingAssetPick: (v) => set({ pendingAssetPick: v })
 }));

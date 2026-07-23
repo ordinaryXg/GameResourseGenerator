@@ -8,6 +8,7 @@ import { InspectorPanel } from '@/components/inspector/InspectorPanel';
 import { PreviewPanel } from '@/components/preview/PreviewPanel';
 import { TemplateLibrary } from '@/components/templates/TemplateLibrary';
 import { HierarchyPanel } from '@/components/hierarchy/HierarchyPanel';
+import { AssetBrowserPanel } from '@/components/assets/AssetBrowserPanel';
 import { ProjectWelcome } from '@/components/layout/ProjectWelcome';
 import { ShaderEditor } from '@/components/editor/ShaderEditor';
 import { AnimationEditor } from '@/components/editor/AnimationEditor';
@@ -15,6 +16,7 @@ import { SettingsModal } from '@/components/layout/SettingsModal';
 import { ExportModal } from '@/components/layout/ExportModal';
 import { ResizeHandle } from '@/components/layout/ResizeHandle';
 import { usePrefabImport } from '@/hooks/usePrefabImport';
+import { useAssetImport } from '@/hooks/useAssetImport';
 import { useAppShortcuts } from '@/hooks/useKeyboardShortcuts';
 
 const App: React.FC = () => {
@@ -23,13 +25,14 @@ const App: React.FC = () => {
     settingsOpen, exportOpen, showToast, isStreaming, activePanel,
     panelSizes, aiSettings, setEffectType, setPreviewVisible, setTemplateLibraryOpen,
     setSettingsOpen, setExportOpen, setActivePanel, adjustPanelSize, showToastMessage,
-    aiPanelVisible, setAiPanelVisible
+    aiPanelVisible, setAiPanelVisible, assetBrowserVisible, setAssetBrowserVisible,
+    pendingAssetPick, setPendingAssetPick
   } = useAppStore();
 
   const {
     project, currentEffect, isLoaded, isDirty, projectPath, selectedNodeId,
     newProject, saveProject, saveProjectAs, closeProject, syncAutosave,
-    undo, redo, undoStack, redoStack
+    undo, redo, undoStack, redoStack, updateEmitterAssetRefs
   } = useProjectStore();
 
   const canUndoNow = undoStack.length > 0;
@@ -42,6 +45,27 @@ const App: React.FC = () => {
     handleImportClick, handleFileChange,
     handleDragOver, handleDragLeave, handleDrop
   } = usePrefabImport();
+
+  const {
+    fileInputRef: assetInputRef,
+    openImportDialog: openAssetImport,
+    handleFileChange: handleAssetImport
+  } = useAssetImport();
+
+  const handleAssetSelect = useCallback((asset: { id: string }) => {
+    if (pendingAssetPick?.slot === 'mainTexture') {
+      updateEmitterAssetRefs(pendingAssetPick.nodeId, { mainTexture: asset.id });
+      setPendingAssetPick(null);
+      showToastMessage('已应用贴图');
+    }
+  }, [pendingAssetPick, updateEmitterAssetRefs, setPendingAssetPick, showToastMessage]);
+
+  const selectedEmitterTextureId = useMemo(() => {
+    if (!project || !selectedNodeId) return null;
+    const node = findNodeById(project.root, selectedNodeId);
+    if (node && node.type === 'emitter') return node.assetRefs.mainTexture ?? null;
+    return null;
+  }, [project, selectedNodeId, project?.metadata.updatedAt]);
 
   useAppShortcuts();
 
@@ -107,6 +131,7 @@ const App: React.FC = () => {
   const resizeLeft = useCallback((d: number) => adjustPanelSize('left', d), [adjustPanelSize]);
   const resizeRight = useCallback((d: number) => adjustPanelSize('right', -d), [adjustPanelSize]);
   const resizePreview = useCallback((d: number) => adjustPanelSize('preview', -d), [adjustPanelSize]);
+  const resizeAssets = useCallback((d: number) => adjustPanelSize('assets', -d), [adjustPanelSize]);
 
   if (templateLibraryOpen) {
     return <TemplateLibrary />;
@@ -159,6 +184,14 @@ const App: React.FC = () => {
 
         <button className="btn-sm" onClick={handleImportClick} title="导入 .prefab 到当前发射器">导入 Prefab</button>
         <button className="btn-sm" onClick={() => setTemplateLibraryOpen(true)} title="模板库">模板库</button>
+        <button className="btn-sm" onClick={openAssetImport} title="导入 PNG 贴图到项目">导入贴图</button>
+        <input
+          ref={assetInputRef}
+          type="file"
+          accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+          style={{ display: 'none' }}
+          onChange={handleAssetImport}
+        />
 
         <input
           ref={fileInputRef}
@@ -210,6 +243,14 @@ const App: React.FC = () => {
         <div className="spacer" />
 
         <button
+          className={`btn-sm${assetBrowserVisible ? ' active' : ''}`}
+          onClick={() => setAssetBrowserVisible(!assetBrowserVisible)}
+          title="显示/隐藏资产浏览器"
+        >
+          资产
+        </button>
+
+        <button
           className={`btn-sm${aiPanelVisible ? ' active' : ''}`}
           onClick={() => {
             setAiPanelVisible(!aiPanelVisible);
@@ -232,8 +273,9 @@ const App: React.FC = () => {
         <button className="btn-sm" onClick={() => setSettingsOpen(true)} title="设置">设置</button>
       </div>
 
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0 }}>
       <div
-        style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}
+        style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative', minHeight: 0 }}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
@@ -277,6 +319,24 @@ const App: React.FC = () => {
         <div style={{ width: panelSizes.right, flexShrink: 0, borderLeft: '1px solid var(--border-color)' }}>
           <InspectorPanel />
         </div>
+      </div>
+
+      {assetBrowserVisible && (
+        <>
+          <ResizeHandle direction="vertical" onResize={resizeAssets} />
+          <div style={{
+            height: panelSizes.assets,
+            borderTop: '1px solid var(--border-color)',
+            flexShrink: 0,
+            minHeight: 100
+          }}>
+            <AssetBrowserPanel
+              selectedAssetId={selectedEmitterTextureId}
+              onSelectTexture={handleAssetSelect}
+            />
+          </div>
+        </>
+      )}
       </div>
 
       <div className="statusbar">

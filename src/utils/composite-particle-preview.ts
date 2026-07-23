@@ -5,6 +5,12 @@ import { composeParticleColor, sampleStartColor } from '@/utils/gradient-utils';
 import { applyTransformToDirection, applyTransformToPoint } from '@/utils/transform-utils';
 import type { EmitterPreviewSource } from '@/utils/preview-sources';
 import type { Transform3D } from '@/types/project';
+import type { AssetEntry } from '@/types/asset';
+import {
+  createFallbackParticleTexture,
+  getCachedParticleTexture,
+  loadParticleTexture
+} from '@/utils/texture-loader';
 
 interface TaggedParticle {
   emitterId: string;
@@ -32,8 +38,20 @@ export class CompositeParticlePreview extends ParticlePreview {
   private taggedParticles: TaggedParticle[] = [];
   private runtimes = new Map<string, EmitterRuntime>();
   private maxTotalParticles = 800;
+  private assetContext: {
+    getAsset: (id: string) => AssetEntry | null;
+    projectDir?: string | null;
+  } | null = null;
+  private fallbackTexture: THREE.Texture | null = null;
 
-  setEmitters(sources: EmitterPreviewSource[]) {
+  setEmitters(
+    sources: EmitterPreviewSource[],
+    assetContext?: {
+      getAsset: (id: string) => AssetEntry | null;
+      projectDir?: string | null;
+    }
+  ) {
+    this.assetContext = assetContext ?? null;
     const normalized = sources.map(s => ({
       id: s.id,
       enabled: s.enabled,
@@ -41,12 +59,20 @@ export class CompositeParticlePreview extends ParticlePreview {
       transform: {
         position: [...s.transform.position] as [number, number, number],
         rotation: [...s.transform.rotation] as [number, number, number],
-        scale: [...s.transform.scale] as [number, number, number]
-      }
+        scale: [...s.transform.scale] as [number, number, number],
+      },
+      mainTextureAssetId: s.mainTextureAssetId
     }));
 
+    this.preloadTextures(normalized);
+
     const sameIds = normalized.length === this.sources.length
-      && normalized.every((s, i) => s.id === this.sources[i]?.id);
+      && normalized.every((s, i) => {
+        const prev = this.sources[i];
+        return prev
+          && s.id === prev.id
+          && s.mainTextureAssetId === prev.mainTextureAssetId;
+      });
 
     if (sameIds && normalized.length > 0) {
       this.sources = normalized;
@@ -193,6 +219,30 @@ export class CompositeParticlePreview extends ParticlePreview {
     }
   }
 
+  private preloadTextures(sources: EmitterPreviewSource[]) {
+    if (!this.assetContext) return;
+    const { getAsset, projectDir } = this.assetContext;
+    for (const source of sources) {
+      const assetId = source.mainTextureAssetId;
+      if (!assetId) continue;
+      const entry = getAsset(assetId);
+      if (!entry) continue;
+      loadParticleTexture(assetId, entry, projectDir).catch(() => { /* fallback used */ });
+    }
+  }
+
+  private getParticleTexture(source: EmitterPreviewSource): THREE.Texture {
+    const assetId = source.mainTextureAssetId;
+    if (assetId) {
+      const cached = getCachedParticleTexture(assetId);
+      if (cached) return cached;
+    }
+    if (!this.fallbackTexture) {
+      this.fallbackTexture = createFallbackParticleTexture();
+    }
+    return this.fallbackTexture;
+  }
+
   private emitForSource(source: EmitterPreviewSource) {
     if (this.taggedParticles.length >= this.maxTotalParticles) return;
     const cfg = source.config;
@@ -213,18 +263,7 @@ export class CompositeParticlePreview extends ParticlePreview {
       cfg.colorOverLifetime.enabled
     );
 
-    const canvas = document.createElement('canvas');
-    canvas.width = 32;
-    canvas.height = 32;
-    const ctx = canvas.getContext('2d')!;
-    const g = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
-    g.addColorStop(0, 'rgba(255,255,255,1)');
-    g.addColorStop(0.3, 'rgba(255,255,255,0.8)');
-    g.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, 32, 32);
-
-    const texture = new THREE.CanvasTexture(canvas);
+    const texture = this.getParticleTexture(source);
     const useAdditive = cfg.rendererModule.renderMode !== 'billboard';
     const material = new THREE.SpriteMaterial({
       map: texture,

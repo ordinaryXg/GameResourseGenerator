@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useCallback, useMemo } from 'react';
 import { useAppStore } from '@/stores/app-store';
 import { useProjectStore } from '@/stores/project-store';
+import { useAssetStore } from '@/stores/asset-store';
 import { CompositeParticlePreview } from '@/utils/composite-particle-preview';
 import { Particle2DPreview } from '@/utils/particle2d-preview';
 import { collectEmitterPreviewSources } from '@/utils/preview-sources';
@@ -33,7 +34,8 @@ export const PreviewPanel: React.FC = () => {
     effectType, previewPlaying, setPreviewPlaying,
     previewBackground, setPreviewBackground, showAxes, setShowAxes
   } = useAppStore();
-  const { project, soloNodeId } = useProjectStore();
+  const { project, soloNodeId, projectDir } = useProjectStore();
+  const getAssetById = useAssetStore(s => s.getAssetById);
   const preview = previewRef.current;
 
   const previewSources = useMemo(() => {
@@ -79,8 +81,8 @@ export const PreviewPanel: React.FC = () => {
   useEffect(() => {
     if (effectType !== 'particle3d') return;
     const inst = previewRef.current as CompositeParticlePreview;
-    inst.setEmitters(previewSources);
-  }, [previewSources, effectType]);
+    inst.setEmitters(previewSources, { getAsset: getAssetById, projectDir });
+  }, [previewSources, effectType, getAssetById, projectDir]);
   useEffect(() => {
     if (previewPlaying) previewRef.current.play();
     else previewRef.current.pause();

@@ -14,6 +14,7 @@ export interface AssetEntry {
     height?: number;
     uuid?: string;
     cocosMeta?: string;
+    shape?: string;
   };
 }
 

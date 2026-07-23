@@ -5,6 +5,7 @@ import type { Particle3DConfig, RangeValue, ShapeType, RenderMode, BurstConfig }
 import { GradientEditor } from './GradientEditor';
 import { CurveEditor } from './CurveEditor';
 import { TransformSection } from './TransformSection';
+import { AssetSlot } from './AssetSlot';
 import { findNodeById } from '@/utils/project-tree';
 import { isEmitterNode, isGroupNode } from '@/types/project';
 
@@ -100,9 +101,9 @@ const RangeInput: React.FC<{
 export const InspectorPanel: React.FC = () => {
   const {
     project, selectedNodeId, currentEffect, updateEffectConfig,
-    updateNodeTransform, setNodeEnabled
+    updateNodeTransform, setNodeEnabled, updateEmitterAssetRefs
   } = useProjectStore();
-  const { selectedModuleKey } = useAppStore();
+  const { selectedModuleKey, setPendingAssetPick, setAssetBrowserVisible } = useAppStore();
   const config = currentEffect?.config as Particle3DConfig | undefined;
   const selectedNode = project && selectedNodeId ? findNodeById(project.root, selectedNodeId) : null;
 
@@ -514,9 +515,17 @@ export const InspectorPanel: React.FC = () => {
               onChange={(v) => updateModule('rendererModule', { lengthScale: v.constant ?? 1 })} min={0} max={10} step={0.1} />
           </>
         )}
-        <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
-          粒子材质使用内置 builtin-particle，贴图由导出时自动附加。
-        </div>
+        {isEmitterNode(selectedNode) && selectedNodeId && (
+          <AssetSlot
+            label="主贴图 (Main Texture)"
+            assetId={selectedNode.assetRefs.mainTexture}
+            onChange={(id) => updateEmitterAssetRefs(selectedNodeId, { mainTexture: id })}
+            onBrowse={() => {
+              setPendingAssetPick({ nodeId: selectedNodeId, slot: 'mainTexture' });
+              setAssetBrowserVisible(true);
+            }}
+          />
+        )}
       </Section>
     </div>
   );

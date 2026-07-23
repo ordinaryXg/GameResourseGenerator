@@ -1,24 +1,16 @@
-import type { AssetEntry } from '@/types/asset';
 import type { EffectGroupNode, EffectProject, ParticleEmitterNode, Transform3D } from '@/types/project';
 import { FX_PROJECT_VERSION } from '@/types/project';
 import { getDefaultParticle3DConfig, generateUUID } from './effect-defaults';
 
-export const DEFAULT_TEXTURE_ASSET_ID = 'builtin-particle-circle';
+import { createBuiltinAssetEntries, DEFAULT_TEXTURE_ASSET_ID } from '@/data/builtin-assets';
+export { DEFAULT_TEXTURE_ASSET_ID };
 
 export function createDefaultTransform(): Transform3D {
   return { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] };
 }
 
-export function createBuiltinAssetRegistry(): AssetEntry[] {
-  return [
-    {
-      id: DEFAULT_TEXTURE_ASSET_ID,
-      name: 'particle-circle',
-      type: 'texture',
-      source: 'builtin',
-      uri: 'builtin://textures/particle-circle.png'
-    }
-  ];
+export function createBuiltinAssetRegistry() {
+  return createBuiltinAssetEntries();
 }
 
 export function createDefaultEmitter(name = 'Particle System'): ParticleEmitterNode {
