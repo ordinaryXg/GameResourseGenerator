@@ -11,19 +11,22 @@ interface AssetDetailPanelProps {
   asset: AssetEntry | null;
   projectDir?: string | null;
   linkedTextureName?: string;
+  /** 嵌入全局属性面板时使用，去掉固定宽度与左边框 */
+  embedded?: boolean;
 }
 
 export const AssetDetailPanel: React.FC<AssetDetailPanelProps> = ({
   asset,
   projectDir,
-  linkedTextureName
+  linkedTextureName,
+  embedded = false
 }) => {
   if (!asset) {
     return (
       <div style={{
-        width: 240,
-        flexShrink: 0,
-        borderLeft: '1px solid var(--border-color)',
+        width: embedded ? '100%' : 240,
+        flexShrink: embedded ? undefined : 0,
+        borderLeft: embedded ? undefined : '1px solid var(--border-color)',
         padding: 12,
         fontSize: 12,
         color: 'var(--text-secondary)',
@@ -43,12 +46,13 @@ export const AssetDetailPanel: React.FC<AssetDetailPanelProps> = ({
 
   return (
     <div style={{
-      width: 240,
-      flexShrink: 0,
-      borderLeft: '1px solid var(--border-color)',
+      width: embedded ? '100%' : 240,
+      flexShrink: embedded ? undefined : 0,
+      borderLeft: embedded ? undefined : '1px solid var(--border-color)',
       padding: 10,
       overflow: 'auto',
-      fontSize: 12
+      fontSize: 12,
+      boxSizing: 'border-box'
     }}>
       <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
         <div style={{

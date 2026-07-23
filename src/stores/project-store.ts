@@ -39,7 +39,9 @@ import {
   type EditorSnapshot,
   type HistoryStacks
 } from '@/utils/project-history';
-import { syncAssetStoreFromProject } from '@/stores/asset-store';
+import { syncAssetStoreFromProject, useAssetStore } from '@/stores/asset-store';
+import { useAppStore } from '@/stores/app-store';
+import { patchAssetInRegistry, duplicateAssetEntry } from '@/utils/asset-registry';
 
 const RECENT_KEY = 'fx-studio-recent-projects';
 const AUTOSAVE_KEY = 'fx-studio-autosave';
@@ -118,6 +120,11 @@ interface ProjectState {
   reparentNode: (nodeId: string, newParentGroupId: string) => void;
   duplicateNode: (nodeId: string) => string;
   removeProjectAsset: (assetId: string) => void;
+  updateProjectAsset: (
+    assetId: string,
+    patch: Partial<AssetEntry> | ((asset: AssetEntry) => AssetEntry)
+  ) => void;
+  duplicateAssetToProject: (sourceAssetId: string) => string;
 
   setCurrentEffect: (effect: EffectConfig | null) => void;
   updateEffectConfig: (updater: (prev: EffectConfig) => EffectConfig) => void;
@@ -267,6 +274,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   closeProject: () => {
+    useAppStore.getState().clearInspectorTarget();
     set({
       project: null,
       projectPath: null,
@@ -292,6 +300,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       selectedNodeId,
       ...refreshBridge({ project, selectedNodeId })
     });
+    useAppStore.getState().selectNodeForInspector(nodeId);
   },
 
   addEmitter: (groupId) => {
@@ -562,12 +571,55 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     const root = { ...project.root, children: clearRefs(project.root.children) };
     const nextProject = touchProjectMetadata({ ...project, root, assetRegistry: registry });
     syncAssetStoreFromProject(registry);
+    const insp = useAppStore.getState().inspectorTarget;
+    if (insp?.kind === 'asset' && insp.assetId === assetId) {
+      useAppStore.getState().clearInspectorTarget();
+    }
     set({
       ...history,
       project: nextProject,
       isDirty: true,
       ...refreshBridge({ project: nextProject, selectedNodeId })
     });
+  },
+
+  updateProjectAsset: (assetId, patch) => {
+    const { project, selectedNodeId, soloNodeId, undoStack, redoStack } = get();
+    if (!project) return;
+    const entry = project.assetRegistry.find(a => a.id === assetId);
+    if (!entry || entry.source === 'builtin') return;
+
+    const history = nextHistoryStacks({ undoStack, redoStack }, project, selectedNodeId, soloNodeId);
+    const registry = patchAssetInRegistry(project.assetRegistry, assetId, patch);
+    const nextProject = touchProjectMetadata({ ...project, assetRegistry: registry });
+    syncAssetStoreFromProject(registry);
+    set({
+      ...history,
+      project: nextProject,
+      isDirty: true,
+      ...refreshBridge({ project: nextProject, selectedNodeId })
+    });
+  },
+
+  duplicateAssetToProject: (sourceAssetId) => {
+    const { project, selectedNodeId, soloNodeId, undoStack, redoStack } = get();
+    if (!project) return '';
+    const source = useAssetStore.getState().getAssetById(sourceAssetId);
+    if (!source) return '';
+
+    const history = nextHistoryStacks({ undoStack, redoStack }, project, selectedNodeId, soloNodeId);
+    const clone = duplicateAssetEntry(source);
+    const registry = [...project.assetRegistry.filter(a => a.id !== clone.id), clone];
+    const nextProject = touchProjectMetadata({ ...project, assetRegistry: registry });
+    syncAssetStoreFromProject(registry);
+    useAppStore.getState().selectAssetForInspector(clone.id);
+    set({
+      ...history,
+      project: nextProject,
+      isDirty: true,
+      ...refreshBridge({ project: nextProject, selectedNodeId })
+    });
+    return clone.id;
   },
 
   addMessage: (msg) => set(s => ({ messages: [...s.messages, msg] })),

@@ -44,6 +44,8 @@ function loadPreviewBackground(): string {
   return stored || '#252530';
 }
 
+import type { InspectorTarget } from '@/types/inspector';
+
 interface AppState {
   aiSettings: AISettings;
   appMode: AppMode;
@@ -66,6 +68,7 @@ interface AppState {
   newEffectModalOpen: boolean;
   aiPanelVisible: boolean;
   assetBrowserVisible: boolean;
+  inspectorTarget: InspectorTarget | null;
 
   setAISettings: (s: Partial<AISettings>) => void;
   setAppMode: (m: AppMode) => void;
@@ -90,6 +93,10 @@ interface AppState {
   setNewEffectModalOpen: (v: boolean) => void;
   setAiPanelVisible: (v: boolean) => void;
   setAssetBrowserVisible: (v: boolean) => void;
+  setInspectorTarget: (t: InspectorTarget | null) => void;
+  selectAssetForInspector: (assetId: string) => void;
+  selectNodeForInspector: (nodeId: string) => void;
+  clearInspectorTarget: () => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -114,6 +121,7 @@ export const useAppStore = create<AppState>((set) => ({
   newEffectModalOpen: false,
   aiPanelVisible: false,
   assetBrowserVisible: true,
+  inspectorTarget: null,
 
   setAISettings: (s) => set(state => ({ aiSettings: { ...state.aiSettings, ...s }, appMode: s.apiKey !== undefined ? (s.apiKey ? 'llm' : 'demo') : state.appMode })),
   setAppMode: (m) => set({ appMode: m }),
@@ -152,5 +160,9 @@ export const useAppStore = create<AppState>((set) => ({
   setLang: (l) => set({ lang: l }),
   setNewEffectModalOpen: (v) => set({ newEffectModalOpen: v }),
   setAiPanelVisible: (v) => set({ aiPanelVisible: v }),
-  setAssetBrowserVisible: (v) => set({ assetBrowserVisible: v })
+  setAssetBrowserVisible: (v) => set({ assetBrowserVisible: v }),
+  setInspectorTarget: (t) => set({ inspectorTarget: t }),
+  selectAssetForInspector: (assetId) => set({ inspectorTarget: { kind: 'asset', assetId } }),
+  selectNodeForInspector: (nodeId) => set({ inspectorTarget: { kind: 'node', nodeId } }),
+  clearInspectorTarget: () => set({ inspectorTarget: null })
 }));

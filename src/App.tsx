@@ -6,7 +6,8 @@ import { assetToEmitterRefsPatch } from '@/utils/asset-apply';
 import { findNodeById } from '@/utils/project-tree';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { NodeEditor } from '@/components/editor/NodeEditor';
-import { InspectorPanel } from '@/components/inspector/InspectorPanel';
+import { PropertiesPanel } from '@/components/properties/PropertiesPanel';
+import { useAssetStore } from '@/stores/asset-store';
 import { PreviewPanel } from '@/components/preview/PreviewPanel';
 import { TemplateLibrary } from '@/components/templates/TemplateLibrary';
 import { HierarchyPanel } from '@/components/hierarchy/HierarchyPanel';
@@ -27,7 +28,8 @@ const App: React.FC = () => {
     settingsOpen, exportOpen, showToast, isStreaming, activePanel,
     panelSizes, aiSettings, setEffectType, setPreviewVisible, setTemplateLibraryOpen,
     setSettingsOpen, setExportOpen, setActivePanel, adjustPanelSize, showToastMessage,
-    aiPanelVisible, setAiPanelVisible, assetBrowserVisible, setAssetBrowserVisible
+    aiPanelVisible, setAiPanelVisible, assetBrowserVisible, setAssetBrowserVisible,
+    inspectorTarget
   } = useAppStore();
 
   const {
@@ -118,6 +120,19 @@ const App: React.FC = () => {
     const node = findNodeById(project.root, selectedNodeId);
     return node?.name ?? '无';
   }, [project, selectedNodeId]);
+
+  const getAssetById = useAssetStore(s => s.getAssetById);
+
+  const inspectorLabel = useMemo(() => {
+    if (!inspectorTarget) return '无';
+    if (inspectorTarget.kind === 'asset') {
+      const asset = getAssetById(inspectorTarget.assetId);
+      return asset?.name ?? '无';
+    }
+    if (!project) return '无';
+    const node = findNodeById(project.root, inspectorTarget.nodeId);
+    return node?.name ?? '无';
+  }, [inspectorTarget, project, getAssetById]);
 
   const handleUndo = useCallback(() => {
     if (canUndoNow) {
@@ -322,7 +337,7 @@ const App: React.FC = () => {
         <ResizeHandle direction="horizontal" onResize={resizeRight} />
 
         <div style={{ width: panelSizes.right, flexShrink: 0, borderLeft: '1px solid var(--border-color)' }}>
-          <InspectorPanel />
+            <PropertiesPanel onApplyAsset={handleApplyAsset} />
         </div>
       </div>
 
@@ -345,6 +360,8 @@ const App: React.FC = () => {
         <span>项目：{project?.name || '无'}{isDirty ? ' *' : ''}</span>
         <span>|</span>
         <span>选中：{selectedNodeName}</span>
+        <span>|</span>
+        <span>属性：{inspectorLabel}</span>
         <span>|</span>
         <span>发射器：{currentEffect?.name || '无'}</span>
         <span>|</span>
