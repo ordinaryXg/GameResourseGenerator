@@ -6,7 +6,7 @@
 | 包名 | cocos-effect-generator |
 | 文档版本 | v1.1 |
 | 最后更新 | 2026-07-22 |
-| 目标引擎 | Cocos Creator 3.8.x（主），Unity 2022+ / Godot 4.x（辅助导出） |
+| 目标引擎 | Cocos Creator 3.8.x（当前完整支持）；Unity、Unreal（导出路线图） |
 | 产品形态 | Electron 桌面应用 + Web 开发预览 |
 
 ---
@@ -19,7 +19,9 @@
 
 ### 1.2 产品定位
 
-> **AI 驱动的游戏粒子特效创作工具**，以 Cocos Creator 3.8 为一等公民，提供类引擎编辑器的创作体验。
+**终极目标**：做一款最好用的特效制作软件，产出可直接导入 **Cocos Creator / Unity / Unreal** 使用的特效资源。
+
+> **面向游戏引擎的通用粒子特效创作工具**，以最佳编辑体验为核心，Cocos Creator 3.8 为当前一等公民导出目标，Unity / Unreal 为扩展方向。
 
 ### 1.3 核心价值
 
@@ -27,7 +29,7 @@
 |--------|------|
 | 降本增效 | 自然语言描述即可生成可用特效初稿 |
 | 所见即所得 | Three.js 实时 WebGL 预览，支持 3D/2D 粒子 |
-| 引擎兼容 | 导出 Cocos Creator `.prefab` 原生格式 |
+| 引擎兼容 | 导出 Cocos Creator `.prefab`（已支持）；Unity / Unreal 导出（路线图） |
 | 可深度编辑 | 节点图 + 属性检查器双轨编辑 |
 | 资产复用 | 15 个内置模板 + 自定义模板保存 |
 

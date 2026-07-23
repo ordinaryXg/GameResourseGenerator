@@ -128,7 +128,7 @@ export const ProjectWelcome: React.FC<ProjectWelcomeProps> = ({ onProjectReady }
           <div>
             <h1 style={{ margin: 0, fontSize: 22 }}>FX Studio</h1>
             <p style={{ margin: 0, fontSize: 12, color: 'var(--text-secondary)' }}>
-              通用游戏特效编辑器 · Cocos Creator 3.8
+              最好用的特效制作软件 · 导出至 Cocos / Unity / Unreal
             </p>
           </div>
         </div>

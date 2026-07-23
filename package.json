@@ -1,7 +1,7 @@
 {
   "name": "cocos-effect-generator",
   "version": "1.0.0",
-  "description": "Cocos AI 特效生成器 - AI 驱动粒子特效创作桌面工具",
+  "description": "FX Studio — 最好用的游戏特效制作软件，支持导出至 Cocos / Unity / Unreal 直接使用",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
