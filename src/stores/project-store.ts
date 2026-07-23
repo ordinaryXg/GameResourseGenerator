@@ -42,6 +42,7 @@ import {
 import { syncAssetStoreFromProject, useAssetStore } from '@/stores/asset-store';
 import { useAppStore } from '@/stores/app-store';
 import { patchAssetInRegistry, duplicateAssetEntry } from '@/utils/asset-registry';
+import { generateBuiltinShaderSource } from '@/utils/builtin-asset-content';
 
 const RECENT_KEY = 'fx-studio-recent-projects';
 const AUTOSAVE_KEY = 'fx-studio-autosave';
@@ -609,6 +610,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
     const history = nextHistoryStacks({ undoStack, redoStack }, project, selectedNodeId, soloNodeId);
     const clone = duplicateAssetEntry(source);
+    if (clone.type === 'shader' && !clone.meta?.shaderSource) {
+      clone.meta = { ...clone.meta, shaderSource: generateBuiltinShaderSource(source) };
+    }
     const registry = [...project.assetRegistry.filter(a => a.id !== clone.id), clone];
     const nextProject = touchProjectMetadata({ ...project, assetRegistry: registry });
     syncAssetStoreFromProject(registry);

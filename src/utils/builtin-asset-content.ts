@@ -33,6 +33,7 @@ export function generateBuiltinMaterialSource(asset: AssetEntry): string {
 }
 
 export function generateBuiltinShaderSource(asset: AssetEntry): string {
+  if (asset.meta?.shaderSource) return asset.meta.shaderSource;
   const category = asset.meta?.category ?? '通用';
   return `// Cocos Creator 3.8 Effect — ${asset.name}
 // 分类: ${category}

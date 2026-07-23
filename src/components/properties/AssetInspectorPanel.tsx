@@ -1,22 +1,38 @@
 import React from 'react';
 import { useAssetStore } from '@/stores/asset-store';
-import { useProjectStore } from '@/stores/project-store';
 import type { AssetEntry } from '@/types/asset';
-import { AssetDetailPanel } from '@/components/assets/AssetDetailPanel';
 import { AssetEditorActions } from '@/components/properties/editors/AssetEditorActions';
+import { TextureAssetEditor } from '@/components/properties/editors/TextureAssetEditor';
+import { SpriteFrameAssetEditor } from '@/components/properties/editors/SpriteFrameAssetEditor';
+import { MaterialAssetEditor } from '@/components/properties/editors/MaterialAssetEditor';
+import { ShaderAssetEditor } from '@/components/properties/editors/ShaderAssetEditor';
+import { MeshAssetEditor } from '@/components/properties/editors/MeshAssetEditor';
 
 interface AssetInspectorPanelProps {
   assetId: string;
   onApplyAsset?: (asset: AssetEntry) => void;
 }
 
+function renderAssetEditor(asset: AssetEntry) {
+  switch (asset.type) {
+    case 'texture':
+      return <TextureAssetEditor key={asset.id} asset={asset} />;
+    case 'spriteFrame':
+      return <SpriteFrameAssetEditor key={asset.id} asset={asset} />;
+    case 'material':
+      return <MaterialAssetEditor key={asset.id} asset={asset} />;
+    case 'shader':
+      return <ShaderAssetEditor key={asset.id} asset={asset} />;
+    case 'mesh':
+      return <MeshAssetEditor key={asset.id} asset={asset} />;
+    default:
+      return null;
+  }
+}
+
 export const AssetInspectorPanel: React.FC<AssetInspectorPanelProps> = ({ assetId, onApplyAsset }) => {
-  const projectDir = useProjectStore(s => s.projectDir);
   const getAssetById = useAssetStore(s => s.getAssetById);
   const asset = getAssetById(assetId);
-  const linkedTextureName = asset?.meta?.textureId
-    ? getAssetById(String(asset.meta.textureId))?.name
-    : undefined;
 
   if (!asset) {
     return (
@@ -39,12 +55,7 @@ export const AssetInspectorPanel: React.FC<AssetInspectorPanelProps> = ({ assetI
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <AssetEditorActions asset={asset} onApplyAsset={onApplyAsset} />
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-        <AssetDetailPanel
-          asset={asset}
-          projectDir={projectDir}
-          linkedTextureName={linkedTextureName}
-          embedded
-        />
+        {renderAssetEditor(asset)}
       </div>
     </div>
   );

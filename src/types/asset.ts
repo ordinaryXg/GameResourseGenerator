@@ -19,6 +19,8 @@ export interface AssetEntry {
     blend?: string;
     description?: string;
     category?: string;
+    /** 项目 Shader 资产的 Effect 源码 */
+    shaderSource?: string;
   };
 }
 

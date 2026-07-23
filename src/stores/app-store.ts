@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { AISettings, EffectType } from '@/types/effect';
+import type { InspectorTarget } from '@/types/inspector';
 
 export type AppMode = 'demo' | 'llm';
 export type Lang = 'zh' | 'en';
@@ -44,8 +45,6 @@ function loadPreviewBackground(): string {
   return stored || '#252530';
 }
 
-import type { InspectorTarget } from '@/types/inspector';
-
 interface AppState {
   aiSettings: AISettings;
   appMode: AppMode;
@@ -69,6 +68,7 @@ interface AppState {
   aiPanelVisible: boolean;
   assetBrowserVisible: boolean;
   inspectorTarget: InspectorTarget | null;
+  shaderDraft: string | null;
 
   setAISettings: (s: Partial<AISettings>) => void;
   setAppMode: (m: AppMode) => void;
@@ -97,6 +97,7 @@ interface AppState {
   selectAssetForInspector: (assetId: string) => void;
   selectNodeForInspector: (nodeId: string) => void;
   clearInspectorTarget: () => void;
+  setShaderDraft: (code: string | null) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -122,6 +123,7 @@ export const useAppStore = create<AppState>((set) => ({
   aiPanelVisible: false,
   assetBrowserVisible: true,
   inspectorTarget: null,
+  shaderDraft: null,
 
   setAISettings: (s) => set(state => ({ aiSettings: { ...state.aiSettings, ...s }, appMode: s.apiKey !== undefined ? (s.apiKey ? 'llm' : 'demo') : state.appMode })),
   setAppMode: (m) => set({ appMode: m }),
@@ -164,5 +166,6 @@ export const useAppStore = create<AppState>((set) => ({
   setInspectorTarget: (t) => set({ inspectorTarget: t }),
   selectAssetForInspector: (assetId) => set({ inspectorTarget: { kind: 'asset', assetId } }),
   selectNodeForInspector: (nodeId) => set({ inspectorTarget: { kind: 'node', nodeId } }),
-  clearInspectorTarget: () => set({ inspectorTarget: null })
+  clearInspectorTarget: () => set({ inspectorTarget: null }),
+  setShaderDraft: (code) => set({ shaderDraft: code })
 }));

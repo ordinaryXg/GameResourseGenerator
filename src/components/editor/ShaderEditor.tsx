@@ -9,6 +9,7 @@ import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import { highlightSelectionMatches, searchKeymap } from '@codemirror/search';
 import { lintKeymap } from '@codemirror/lint';
 import { useProjectStore } from '@/stores/project-store';
+import { useAppStore } from '@/stores/app-store';
 import { generateId } from '@/utils/effect-defaults';
 import { extractFragmentProgram, preprocessForWebGL, compileFragmentShader } from '@/utils/shader-preprocessor';
 
@@ -112,6 +113,17 @@ export const ShaderEditor: React.FC = () => {
   const [code, setCode] = useState(DEFAULT_SHADER);
   const [compileError, setCompileError] = useState<string | null>(null);
   const { addMessage } = useProjectStore();
+  const shaderDraft = useAppStore(s => s.shaderDraft);
+  const setShaderDraft = useAppStore(s => s.setShaderDraft);
+
+  useEffect(() => {
+    if (!shaderDraft || !viewRef.current) return;
+    const view = viewRef.current;
+    const len = view.state.doc.length;
+    view.dispatch({ changes: { from: 0, to: len, insert: shaderDraft } });
+    setCode(shaderDraft);
+    setShaderDraft(null);
+  }, [shaderDraft, setShaderDraft]);
 
   useEffect(() => {
     if (!editorRef.current) return;
