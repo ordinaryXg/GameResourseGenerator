@@ -8,6 +8,9 @@ import type {
   EmitFrom,
   RenderMode
 } from '@/types/effect';
+import type { EffectGroupNode, EffectNode, ParticleEmitterNode } from '@/types/project';
+import { isEmitterNode } from '@/types/project';
+import { transformToCocosLocal } from '@/utils/transform-utils';
 
 /** Cocos Creator 3.8.6 builtin particle effect UUID (from real project export). */
 export const BUILTIN_PARTICLE_EFFECT_UUID = 'd1346436-ac96-4271-b863-1f4fdead95b0';
@@ -132,9 +135,15 @@ export function buildPrefabMeta(uuid: string, name: string) {
   };
 }
 
+export interface EmitterExportBinding {
+  materialUuid: string;
+  spriteFrameUuid?: string;
+}
+
 /** Reference-based prefab serializer matching Cocos Creator 3.8 format. */
 export class CocosPrefabBuilder {
   private pool: Record<string, unknown>[] = [];
+  private prefabRootIdx = -1;
 
   private push(obj: Record<string, unknown>): number {
     this.pool.push(obj);
@@ -238,12 +247,136 @@ export class CocosPrefabBuilder {
     });
   }
 
+  /** Build a multi-emitter prefab from an effect node tree. */
+  buildFromTree(
+    root: EffectGroupNode,
+    prefabName: string,
+    resolveEmitter: (emitter: ParticleEmitterNode) => EmitterExportBinding
+  ): string {
+    this.pool = [{}];
+    this.prefabRootIdx = -1;
+    const rootNodeIdx = this.buildNodeRecursive(root, null, resolveEmitter);
+    this.pool[0] = {
+      __type__: 'cc.Prefab',
+      _name: prefabName,
+      _objFlags: 0,
+      _native: '',
+      data: this.ref(rootNodeIdx),
+      optimizationPolicy: 0,
+      asyncLoadAssets: false,
+      persistent: false
+    };
+    return JSON.stringify(this.pool, null, 2);
+  }
+
+  private buildNodeRecursive(
+    node: EffectNode,
+    parentIdx: number | null,
+    resolveEmitter: (emitter: ParticleEmitterNode) => EmitterExportBinding
+  ): number {
+    const local = transformToCocosLocal(node.transform);
+    const nodeIdx = this.push({
+      __type__: 'cc.Node',
+      _name: node.name,
+      _objFlags: 0,
+      _parent: parentIdx !== null ? this.ref(parentIdx) : null,
+      _children: [],
+      _active: node.enabled,
+      _components: [],
+      _lpos: local._lpos,
+      _lrot: local._lrot,
+      _lscale: local._lscale,
+      _layer: 1073741824,
+      _euler: local._euler,
+      _id: ''
+    });
+
+    if (parentIdx === null) this.prefabRootIdx = nodeIdx;
+    if (parentIdx !== null) {
+      (this.pool[parentIdx] as { _children: Array<{ __id__: number }> })._children.push(this.ref(nodeIdx));
+    }
+
+    if (isEmitterNode(node)) {
+      const binding = resolveEmitter(node);
+      const psIdx = this.appendParticleSystem(
+        nodeIdx, node.config, binding.materialUuid, binding.spriteFrameUuid
+      );
+      (this.pool[nodeIdx] as { _components: Array<{ __id__: number }> })._components = [this.ref(psIdx)];
+    } else {
+      for (const child of node.children) {
+        this.buildNodeRecursive(child, nodeIdx, resolveEmitter);
+      }
+    }
+
+    const nodePrefabIdx = this.push({
+      __type__: 'cc.PrefabInfo',
+      root: this.ref(this.prefabRootIdx),
+      asset: this.ref(0),
+      fileId: generateFileId(),
+      targetOverrides: null
+    });
+    (this.pool[nodeIdx] as { _prefab: { __id__: number } })._prefab = this.ref(nodePrefabIdx);
+    return nodeIdx;
+  }
+
   build(config: Particle3DConfig, name: string, materialUuid: string, spriteFrameUuid?: string): string {
     this.pool = [];
-    // Reserve [0] prefab, [1] node — filled after sub-objects are built
     this.pool.push({});
     this.pool.push({});
+    this.prefabRootIdx = 1;
 
+    const psComponentIdx = this.appendParticleSystem(1, config, materialUuid, spriteFrameUuid);
+
+    const nodePrefabIdx = this.push({
+      __type__: 'cc.PrefabInfo',
+      root: this.ref(1),
+      asset: this.ref(0),
+      fileId: generateFileId()
+    });
+
+    const local = transformToCocosLocal({
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1]
+    });
+
+    this.pool[1] = {
+      __type__: 'cc.Node',
+      _name: name,
+      _objFlags: 0,
+      _parent: null,
+      _children: [],
+      _active: true,
+      _components: [this.ref(psComponentIdx)],
+      _prefab: this.ref(nodePrefabIdx),
+      _lpos: local._lpos,
+      _lrot: local._lrot,
+      _lscale: local._lscale,
+      _layer: 1073741824,
+      _euler: local._euler,
+      _id: ''
+    };
+
+    this.pool[0] = {
+      __type__: 'cc.Prefab',
+      _name: name,
+      _objFlags: 0,
+      _native: '',
+      data: this.ref(1),
+      optimizationPolicy: 0,
+      asyncLoadAssets: false,
+      persistent: false
+    };
+
+    return JSON.stringify(this.pool, null, 2);
+  }
+
+  private appendParticleSystem(
+    nodeIdx: number,
+    config: Particle3DConfig,
+    materialUuid: string,
+    spriteFrameUuid?: string
+  ): number {
     const main = config.mainModule;
     const shape = config.shapeModule;
 
@@ -423,7 +556,7 @@ export class CocosPrefabBuilder {
       __type__: 'cc.ParticleSystem',
       _name: '',
       _objFlags: 0,
-      node: this.ref(1),
+      node: this.ref(nodeIdx),
       _enabled: true,
       __prefab: this.ref(compPrefabIdx),
       _materials: [{ __uuid__: materialUuid }],
@@ -486,42 +619,7 @@ export class CocosPrefabBuilder {
 
     (this.pool[psComponentIdx] as Record<string, unknown>)._trailModule = this.ref(trailIdx);
 
-    const nodePrefabIdx = this.push({
-      __type__: 'cc.PrefabInfo',
-      root: this.ref(1),
-      asset: this.ref(0),
-      fileId: generateFileId()
-    });
-
-    this.pool[1] = {
-      __type__: 'cc.Node',
-      _name: name,
-      _objFlags: 0,
-      _parent: null,
-      _children: [],
-      _active: true,
-      _components: [this.ref(psComponentIdx)],
-      _prefab: this.ref(nodePrefabIdx),
-      _lpos: { __type__: 'cc.Vec3', x: 0, y: 0, z: 0 },
-      _lrot: { __type__: 'cc.Quat', x: 0, y: 0, z: 0, w: 1 },
-      _lscale: { __type__: 'cc.Vec3', x: 1, y: 1, z: 1 },
-      _layer: 1073741824,
-      _euler: { __type__: 'cc.Vec3', x: 0, y: 0, z: 0 },
-      _id: ''
-    };
-
-    this.pool[0] = {
-      __type__: 'cc.Prefab',
-      _name: name,
-      _objFlags: 0,
-      _native: '',
-      data: this.ref(1),
-      optimizationPolicy: 0,
-      asyncLoadAssets: false,
-      persistent: false
-    };
-
-    return JSON.stringify(this.pool, null, 2);
+    return psComponentIdx;
   }
 }
 

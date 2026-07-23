@@ -1,6 +1,7 @@
 import type { EffectConfig, Particle3DConfig } from '@/types/effect';
 import type { EmitterAssetRefs } from '@/types/asset';
 import type { AssetEntry } from '@/types/asset';
+import type { EffectProject } from '@/types/project';
 import { generateUUID } from './effect-defaults';
 import {
   CocosPrefabBuilder,
@@ -12,8 +13,186 @@ import { buildDefaultTextureExport } from './default-particle-texture';
 import {
   buildTextureExportFromAsset,
   resolveTextureAssetForExport,
-  resolveMaterialTechIdx
+  resolveMaterialTechIdx,
+  buildExportAssetSummary,
+  type ExportAssetSummary
 } from './asset-texture-export';
+import { getEmitterNodes } from './preview-sources';
+
+export interface ProjectExportAssetFile {
+  fileName: string;
+  content: string;
+  metaFileName: string;
+  metaContent: string;
+  encoding?: 'base64';
+}
+
+export interface ProjectPrefabExportResult {
+  prefabContent: string;
+  metaContent: string;
+  assetFiles: ProjectExportAssetFile[];
+  emitterSummaries: ExportAssetSummary[];
+  emitterCount: number;
+}
+
+export interface ProjectExportContext {
+  projectAssets?: AssetEntry[];
+  getAsset?: (id: string) => AssetEntry | null;
+}
+
+function sanitizeExportBaseName(name: string): string {
+  return name.replace(/[^\w\u4e00-\u9fff-]+/g, '-').replace(/^-+|-+$/g, '') || 'asset';
+}
+
+function collectProjectExportBindings(
+  project: EffectProject,
+  ctx?: ProjectExportContext
+): {
+  textureByAssetId: Map<string, ReturnType<typeof buildTextureExportFromAsset>>;
+  materialByKey: Map<string, { uuid: string; techIdx: number; spriteFrameUuid: string; fileBase: string }>;
+  emitterBindings: Map<string, { materialUuid: string; spriteFrameUuid: string }>;
+  emitterSummaries: ExportAssetSummary[];
+} {
+  const getAsset = ctx?.getAsset ?? (() => null);
+  const projectAssets = ctx?.projectAssets ?? project.assetRegistry;
+  const emitters = getEmitterNodes(project.root);
+  const textureByAssetId = new Map<string, ReturnType<typeof buildTextureExportFromAsset>>();
+  const materialByKey = new Map<string, { uuid: string; techIdx: number; spriteFrameUuid: string; fileBase: string }>();
+  const emitterBindings = new Map<string, { materialUuid: string; spriteFrameUuid: string }>();
+  const emitterSummaries: ExportAssetSummary[] = [];
+
+  for (const emitter of emitters) {
+    const texAsset = resolveTextureAssetForExport(emitter.assetRefs, projectAssets);
+    if (!textureByAssetId.has(texAsset.id)) {
+      textureByAssetId.set(texAsset.id, buildTextureExportFromAsset(texAsset));
+    }
+    const tex = textureByAssetId.get(texAsset.id)!;
+    const matKey = `${emitter.assetRefs.material ?? 'default'}|${texAsset.id}`;
+    if (!materialByKey.has(matKey)) {
+      const matAsset = emitter.assetRefs.material ? getAsset(emitter.assetRefs.material) : null;
+      materialByKey.set(matKey, {
+        uuid: generateUUID(),
+        techIdx: resolveMaterialTechIdx(emitter.assetRefs.material, getAsset),
+        spriteFrameUuid: tex.spriteFrameUuid,
+        fileBase: sanitizeExportBaseName(matAsset?.name ?? `${emitter.name}-particle`)
+      });
+    }
+    const mat = materialByKey.get(matKey)!;
+    emitterBindings.set(emitter.id, {
+      materialUuid: mat.uuid,
+      spriteFrameUuid: tex.spriteFrameUuid
+    });
+    emitterSummaries.push(buildExportAssetSummary(emitter.assetRefs, projectAssets, getAsset));
+  }
+
+  return { textureByAssetId, materialByKey, emitterBindings, emitterSummaries };
+}
+
+export function generateProjectPrefab(
+  project: EffectProject,
+  ctx?: ProjectExportContext
+): ProjectPrefabExportResult {
+  const { textureByAssetId, materialByKey, emitterBindings, emitterSummaries } =
+    collectProjectExportBindings(project, ctx);
+  const emitters = getEmitterNodes(project.root);
+
+  const prefabContent = new CocosPrefabBuilder().buildFromTree(
+    project.root,
+    project.name,
+    (emitter) => emitterBindings.get(emitter.id)!
+  );
+  const metaContent = JSON.stringify(buildPrefabMeta(project.id, project.name), null, 2);
+
+  const assetFiles: ProjectExportAssetFile[] = [];
+  const usedTextureNames = new Set<string>();
+  for (const [, tex] of textureByAssetId) {
+    if (usedTextureNames.has(tex.fileName)) continue;
+    usedTextureNames.add(tex.fileName);
+    assetFiles.push({
+      fileName: tex.fileName,
+      content: tex.pngBase64,
+      encoding: 'base64',
+      metaFileName: `${tex.fileName}.meta`,
+      metaContent: tex.metaContent
+    });
+  }
+
+  const usedMaterialNames = new Set<string>();
+  for (const [, mat] of materialByKey) {
+    let fileBase = mat.fileBase;
+    if (usedMaterialNames.has(fileBase)) {
+      let i = 2;
+      while (usedMaterialNames.has(`${fileBase}-${i}`)) i++;
+      fileBase = `${fileBase}-${i}`;
+    }
+    usedMaterialNames.add(fileBase);
+    assetFiles.push({
+      fileName: `${fileBase}.mtl`,
+      content: JSON.stringify(
+        buildParticleMaterial(mat.spriteFrameUuid, mat.techIdx), null, 2
+      ),
+      metaFileName: `${fileBase}.mtl.meta`,
+      metaContent: JSON.stringify(buildMaterialMeta(mat.uuid), null, 2)
+    });
+  }
+
+  return {
+    prefabContent,
+    metaContent,
+    assetFiles,
+    emitterSummaries,
+    emitterCount: emitters.length
+  };
+}
+
+export async function exportProjectToCocos(
+  project: EffectProject,
+  projectPath: string,
+  ctx?: ProjectExportContext
+): Promise<{ success: boolean; paths: string[]; error?: string }> {
+  const { prefabContent, metaContent, assetFiles } = generateProjectPrefab(project, ctx);
+  const targetDir = `${projectPath}/assets/effects/${project.id}`;
+  const prefabPath = `${targetDir}/${project.name}.prefab`;
+  const metaPath = `${targetDir}/${project.name}.prefab.meta`;
+
+  const writes: Array<{ path: string; content: string; encoding?: 'base64' | 'utf8' }> = [
+    { path: prefabPath, content: prefabContent },
+    { path: metaPath, content: metaContent },
+    ...assetFiles.flatMap(a => [
+      { path: `${targetDir}/${a.fileName}`, content: a.content, encoding: a.encoding },
+      { path: `${targetDir}/${a.metaFileName}`, content: a.metaContent }
+    ])
+  ];
+
+  try {
+    if (window.electronAPI) {
+      const results = await window.electronAPI.writeExportFiles(writes);
+      const paths: string[] = [];
+      let hasError = false;
+      let errorMsg = '';
+      for (const r of results) {
+        if (r.success) paths.push(r.path);
+        else { hasError = true; errorMsg = r.error || 'Unknown error'; }
+      }
+      return { success: !hasError, paths, error: hasError ? errorMsg : undefined };
+    }
+
+    downloadFile(`${project.name}.prefab`, prefabContent);
+    downloadFile(`${project.name}.prefab.meta`, metaContent);
+    for (const asset of assetFiles) {
+      if (asset.encoding === 'base64') downloadTexture(asset.fileName, asset.content);
+      else downloadFile(asset.fileName, asset.content);
+      downloadFile(asset.metaFileName, asset.metaContent);
+    }
+    return {
+      success: true,
+      paths: [`${project.name}.prefab`, ...assetFiles.map(a => a.fileName)]
+    };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    return { success: false, paths: [], error: msg };
+  }
+}
 
 export interface PrefabExportResult {
   prefabContent: string;

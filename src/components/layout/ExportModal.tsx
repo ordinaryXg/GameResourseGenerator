@@ -2,13 +2,16 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { useAppStore } from '@/stores/app-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useAssetStore } from '@/stores/asset-store';
-import { exportToCocosProject, generatePrefab } from '@/utils/export-pipeline';
-import { buildExportAssetSummary } from '@/utils/asset-texture-export';
+import {
+  exportProjectToCocos,
+  exportToCocosProject,
+  generateProjectPrefab,
+  generatePrefab
+} from '@/utils/export-pipeline';
 import { getCompatibilityReport, exportToEngine } from '@/utils/multi-engine-export';
 import type { TargetEngine } from '@/utils/multi-engine-export';
 import type { Particle3DConfig } from '@/types/effect';
-import { findNodeById, getFirstEmitter } from '@/utils/project-tree';
-import { isEmitterNode } from '@/types/project';
+import { getEmitterNodes } from '@/utils/preview-sources';
 
 const ENGINE_OPTIONS: { value: TargetEngine; label: string }[] = [
   { value: 'cocos', label: 'Cocos Creator 3.8' },
@@ -18,54 +21,44 @@ const ENGINE_OPTIONS: { value: TargetEngine; label: string }[] = [
 
 export const ExportModal: React.FC = () => {
   const { cocosProjectPath, setCocosProjectPath, setExportOpen, showToastMessage } = useAppStore();
-  const { currentEffect, project, selectedNodeId } = useProjectStore();
+  const { currentEffect, project } = useProjectStore();
   const getAssetById = useAssetStore(s => s.getAssetById);
   const [projectPath, setProjectPath] = useState(cocosProjectPath);
   const [exporting, setExporting] = useState(false);
   const [targetEngine, setTargetEngine] = useState<TargetEngine>('cocos');
   const [result, setResult] = useState<{ success: boolean; paths: string[]; error?: string } | null>(null);
 
+  const projectExportContext = useMemo(() => {
+    if (!project) return undefined;
+    return {
+      projectAssets: project.assetRegistry,
+      getAsset: getAssetById
+    };
+  }, [project, getAssetById]);
+
+  const emitterCount = project ? getEmitterNodes(project.root).length : 0;
+
+  const projectPreview = useMemo(() => {
+    if (!project || targetEngine !== 'cocos') return null;
+    return generateProjectPrefab(project, projectExportContext);
+  }, [project, projectExportContext, targetEngine]);
+
   const compatibility = currentEffect && targetEngine !== 'cocos'
     ? getCompatibilityReport(currentEffect.config as Particle3DConfig, targetEngine)
     : [];
 
-  const exportContext = useMemo(() => {
-    if (!project) return undefined;
-    const node = selectedNodeId
-      ? findNodeById(project.root, selectedNodeId)
-      : getFirstEmitter(project.root);
-    if (!node || !isEmitterNode(node)) return undefined;
-    return {
-      assetRefs: node.assetRefs,
-      projectAssets: project.assetRegistry,
-      getAsset: getAssetById
-    };
-  }, [project, selectedNodeId, getAssetById]);
-
-  const assetSummary = useMemo(() => {
-    if (!project || !exportContext) return null;
-    return buildExportAssetSummary(
-      exportContext.assetRefs,
-      project.assetRegistry,
-      getAssetById
-    );
-  }, [project, exportContext, getAssetById]);
-
-  const prefabPreview = useMemo(() => {
-    if (!currentEffect || targetEngine !== 'cocos') return null;
-    return generatePrefab(currentEffect, exportContext);
-  }, [currentEffect, exportContext, targetEngine]);
-
   const handleExport = useCallback(async () => {
-    if (!currentEffect) return;
+    if (!project && !currentEffect) return;
     setExporting(true);
     setResult(null);
 
     if (targetEngine === 'cocos') {
-      const res = await exportToCocosProject(currentEffect, projectPath || '', exportContext);
+      const res = project
+        ? await exportProjectToCocos(project, projectPath || '', projectExportContext)
+        : await exportToCocosProject(currentEffect!, projectPath || '');
       setResult(res);
       if (res.success) showToastMessage(`导出成功！${res.paths.length} 个文件`);
-    } else {
+    } else if (currentEffect) {
       const exp = exportToEngine(currentEffect.config as Particle3DConfig, currentEffect.name, targetEngine);
       const blob = new Blob([exp.content], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
@@ -79,7 +72,7 @@ export const ExportModal: React.FC = () => {
     }
 
     setExporting(false);
-  }, [currentEffect, targetEngine, projectPath, showToastMessage, exportContext]);
+  }, [project, currentEffect, targetEngine, projectPath, showToastMessage, projectExportContext]);
 
   const handleSelectPath = useCallback(async () => {
     if (window.electronAPI) {
@@ -89,7 +82,6 @@ export const ExportModal: React.FC = () => {
         setCocosProjectPath(dir);
       }
     } else {
-      // Web fallback
       const input = prompt('请输入 Cocos Creator 项目路径：');
       if (input) {
         setProjectPath(input);
@@ -98,7 +90,10 @@ export const ExportModal: React.FC = () => {
     }
   }, [setCocosProjectPath]);
 
-  if (!currentEffect) return null;
+  if (!project && !currentEffect) return null;
+
+  const exportName = project?.name ?? currentEffect!.name;
+  const exportId = project?.id ?? currentEffect!.id;
 
   return (
     <div className="modal-overlay" onClick={() => setExportOpen(false)}>
@@ -106,14 +101,16 @@ export const ExportModal: React.FC = () => {
         <h2>📤 导出到 Cocos Creator</h2>
 
         <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>特效名称</div>
-          <div style={{ fontSize: 16, fontWeight: 600 }}>{currentEffect.name}</div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>项目名称</div>
+          <div style={{ fontSize: 16, fontWeight: 600 }}>{exportName}</div>
         </div>
 
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>特效类型</div>
-          <div>{currentEffect.type === 'particle3d' ? '3D 粒子' : currentEffect.type}</div>
-        </div>
+        {project && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>粒子发射器</div>
+            <div>{emitterCount} 个</div>
+          </div>
+        )}
 
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>目标引擎</div>
@@ -160,13 +157,21 @@ export const ExportModal: React.FC = () => {
 
         <div style={{ marginBottom: 16, fontSize: 13, color: 'var(--text-secondary)' }}>
           <div>导出文件：</div>
-          <div>• {currentEffect.name}.prefab</div>
-          <div>• {currentEffect.name}.prefab.meta</div>
-          <div>• {currentEffect.name}-particle.mtl</div>
-          <div>• {currentEffect.name}-particle.mtl.meta</div>
-          <div>• {prefabPreview?.textureFileName ?? 'particle-circle.png'}</div>
-          <div>• {(prefabPreview?.textureFileName ?? 'particle-circle.png')}.meta</div>
-          {assetSummary && (
+          <div>• {exportName}.prefab</div>
+          <div>• {exportName}.prefab.meta</div>
+          {projectPreview?.assetFiles.map((asset) => (
+            <React.Fragment key={asset.fileName}>
+              <div>• {asset.fileName}</div>
+              <div>• {asset.metaFileName}</div>
+            </React.Fragment>
+          ))}
+          {!project && currentEffect && (
+            <>
+              <div>• {currentEffect.name}-particle.mtl</div>
+              <div>• {generatePrefab(currentEffect).textureFileName}</div>
+            </>
+          )}
+          {projectPreview && projectPreview.emitterSummaries.length > 0 && (
             <div style={{
               marginTop: 8,
               padding: 8,
@@ -174,14 +179,19 @@ export const ExportModal: React.FC = () => {
               borderRadius: 6,
               fontSize: 12
             }}>
-              <div style={{ fontWeight: 600, marginBottom: 4, color: 'var(--text-primary)' }}>资产引用（与预览一致）</div>
-              <div>贴图：{assetSummary.textureAssetName}</div>
-              <div>材质：{assetSummary.materialName}（{assetSummary.materialBlend}）</div>
+              <div style={{ fontWeight: 600, marginBottom: 4, color: 'var(--text-primary)' }}>
+                资产清单（{projectPreview.emitterCount} 个发射器）
+              </div>
+              {projectPreview.emitterSummaries.map((summary, i) => (
+                <div key={i} style={{ marginBottom: 4 }}>
+                  贴图 {summary.textureAssetName} · 材质 {summary.materialName}（{summary.materialBlend}）
+                </div>
+              ))}
             </div>
           )}
           {projectPath && (
             <div style={{ marginTop: 4 }}>
-              目标路径：assets/effects/{currentEffect.id.substring(0, 8)}-/
+              目标路径：assets/effects/{exportId.substring(0, 8)}-/
             </div>
           )}
         </div>

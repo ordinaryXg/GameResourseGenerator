@@ -43,3 +43,46 @@ export function applyTransformToDirection(t: Transform3D, dir: THREE.Vector3): T
   if (len === 0) return dir.clone();
   return dir.clone().transformDirection(mat).normalize().multiplyScalar(len);
 }
+
+export interface CocosLocalTransform {
+  _lpos: { __type__: 'cc.Vec3'; x: number; y: number; z: number };
+  _lrot: { __type__: 'cc.Quat'; x: number; y: number; z: number; w: number };
+  _lscale: { __type__: 'cc.Vec3'; x: number; y: number; z: number };
+  _euler: { __type__: 'cc.Vec3'; x: number; y: number; z: number };
+}
+
+export function transformToCocosLocal(t: Transform3D): CocosLocalTransform {
+  const quat = new THREE.Quaternion().setFromEuler(
+    new THREE.Euler(t.rotation[0] * DEG2RAD, t.rotation[1] * DEG2RAD, t.rotation[2] * DEG2RAD, 'XYZ')
+  );
+  return {
+    _lpos: { __type__: 'cc.Vec3', x: t.position[0], y: t.position[1], z: t.position[2] },
+    _lrot: { __type__: 'cc.Quat', x: quat.x, y: quat.y, z: quat.z, w: quat.w },
+    _lscale: { __type__: 'cc.Vec3', x: t.scale[0], y: t.scale[1], z: t.scale[2] },
+    _euler: { __type__: 'cc.Vec3', x: t.rotation[0], y: t.rotation[1], z: t.rotation[2] }
+  };
+}
+
+export function cocosLocalToTransform(node: Record<string, unknown>): Transform3D {
+  const pos = node._lpos as { x?: number; y?: number; z?: number } | undefined;
+  const scale = node._lscale as { x?: number; y?: number; z?: number } | undefined;
+  const euler = node._euler as { x?: number; y?: number; z?: number } | undefined;
+  if (euler) {
+    return {
+      position: [pos?.x ?? 0, pos?.y ?? 0, pos?.z ?? 0],
+      rotation: [euler.x ?? 0, euler.y ?? 0, euler.z ?? 0],
+      scale: [scale?.x ?? 1, scale?.y ?? 1, scale?.z ?? 1]
+    };
+  }
+  const rot = node._lrot as { x?: number; y?: number; z?: number; w?: number } | undefined;
+  if (rot) {
+    const quat = new THREE.Quaternion(rot.x ?? 0, rot.y ?? 0, rot.z ?? 0, rot.w ?? 1);
+    const e = new THREE.Euler().setFromQuaternion(quat, 'XYZ');
+    return {
+      position: [pos?.x ?? 0, pos?.y ?? 0, pos?.z ?? 0],
+      rotation: [e.x / DEG2RAD, e.y / DEG2RAD, e.z / DEG2RAD],
+      scale: [scale?.x ?? 1, scale?.y ?? 1, scale?.z ?? 1]
+    };
+  }
+  return identityTransform();
+}

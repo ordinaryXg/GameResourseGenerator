@@ -1,12 +1,27 @@
 import type { EffectConfig, Particle3DConfig } from '@/types/effect';
+import type { EffectGroupNode, EffectNode, EffectProject, ParticleEmitterNode } from '@/types/project';
+import { FX_PROJECT_VERSION } from '@/types/project';
 import { generateUUID } from './effect-defaults';
 import {
   parseCurveRange, parseGradientFromPrefab, parseCurve, parseBursts,
-  parseShapeType, parseEmitFrom, parseRenderMode, parseAlignSpace
+  parseShapeType, parseEmitFrom, parseRenderMode, parseAlignSpace,
+  resolvePrefabRef
 } from './cocos-serializers';
+import { cocosLocalToTransform, identityTransform } from './transform-utils';
+import {
+  createBuiltinAssetRegistry,
+  DEFAULT_TEXTURE_ASSET_ID,
+  DEFAULT_MATERIAL_ASSET_ID
+} from './project-factory';
 
 export interface ImportResult {
   effectConfig: EffectConfig;
+  unsupportedModules: string[];
+  warnings: string[];
+}
+
+export interface ImportProjectResult {
+  project: EffectProject;
   unsupportedModules: string[];
   warnings: string[];
 }
@@ -33,6 +48,27 @@ interface RawPrefabData {
   _trailModule?: Record<string, unknown>;
   _textureAnimationModule?: Record<string, unknown>;
   renderer?: Record<string, unknown>;
+  duration?: number;
+  _capacity?: number;
+  capacity?: number;
+  loop?: boolean;
+  playOnAwake?: boolean;
+  simulationSpeed?: number;
+  startDelay?: unknown;
+  startLifetime?: unknown;
+  startSpeed?: unknown;
+  startSize3D?: Record<string, unknown>;
+  startSizeX?: unknown;
+  startSizeY?: unknown;
+  startSizeZ?: unknown;
+  startRotationX?: unknown;
+  startRotationY?: unknown;
+  startRotationZ?: unknown;
+  startColor?: unknown;
+  gravityModifier?: unknown;
+  rateOverTime?: unknown;
+  rateOverDistance?: unknown;
+  bursts?: unknown;
   [key: string]: unknown;
 }
 
@@ -77,29 +113,23 @@ function readRenderer(ps: RawPrefabData) {
   return ps.renderer ?? ps._N$renderer;
 }
 
-export function parsePrefab(jsonString: string): ImportResult {
+function parsePool(jsonString: string): unknown[] {
   let prefabArray: unknown[];
   try {
     prefabArray = JSON.parse(jsonString);
   } catch {
     throw new Error('文件格式无效，无法解析');
   }
-
   if (!Array.isArray(prefabArray) || prefabArray.length < 2) {
     throw new Error('无效的 .prefab 文件格式');
   }
+  return prefabArray;
+}
 
-  let psData: RawPrefabData | null = null;
-  let nodeData: { _name?: string } | null = null;
-
-  for (const item of prefabArray) {
-    if ((item as RawPrefabData)?.__type__ === 'cc.ParticleSystem') psData = item as RawPrefabData;
-    if ((item as RawPrefabData)?.__type__ === 'cc.Node') nodeData = item as { _name?: string };
-  }
-
-  if (!psData) throw new Error('该预制体不包含粒子系统组件（cc.ParticleSystem）');
-
-  const name = nodeData?._name || psData._name || '导入特效';
+export function parseParticleSystemConfig(
+  prefabArray: unknown[],
+  psData: RawPrefabData
+): Particle3DConfig {
   const main = readMainModule(psData);
   const shape = readShape(psData);
   const colorOL = readColorOL(psData);
@@ -111,7 +141,7 @@ export function parsePrefab(jsonString: string): ImportResult {
   const texAnim = readTexAnim(psData);
   const renderer = readRenderer(psData);
 
-  const config: Particle3DConfig = {
+  return {
     mainModule: {
       duration: (main.duration as number) ?? 5,
       capacity: (main._capacity ?? main.capacity ?? 100) as number,
@@ -191,6 +221,135 @@ export function parsePrefab(jsonString: string): ImportResult {
       alignSpace: parseAlignSpace(renderer?._alignSpace)
     }
   };
+}
+
+function findParticleSystemOnNode(
+  pool: unknown[],
+  node: Record<string, unknown>
+): RawPrefabData | null {
+  const components = node._components as Array<{ __id__?: number }> | undefined;
+  if (!components) return null;
+  for (const compRef of components) {
+    const comp = resolvePrefabRef(pool, compRef) as RawPrefabData | null;
+    if (comp?.__type__ === 'cc.ParticleSystem') return comp;
+  }
+  return null;
+}
+
+function parseNodeTree(pool: unknown[], nodeIdx: number): EffectNode {
+  const node = pool[nodeIdx] as Record<string, unknown>;
+  if (!node || node.__type__ !== 'cc.Node') {
+    throw new Error('无效的节点结构');
+  }
+
+  const transform = cocosLocalToTransform(node);
+  const name = (node._name as string) || 'Node';
+  const enabled = node._active !== false;
+  const ps = findParticleSystemOnNode(pool, node);
+
+  if (ps) {
+    const emitter: ParticleEmitterNode = {
+      type: 'emitter',
+      id: generateUUID(),
+      name,
+      enabled,
+      transform,
+      config: parseParticleSystemConfig(pool, ps),
+      assetRefs: {
+        mainTexture: DEFAULT_TEXTURE_ASSET_ID,
+        material: DEFAULT_MATERIAL_ASSET_ID
+      }
+    };
+    return emitter;
+  }
+
+  const children: EffectNode[] = [];
+  const childRefs = node._children as Array<{ __id__?: number }> | undefined;
+  if (childRefs) {
+    for (const childRef of childRefs) {
+      const childIdx = (childRef as { __id__?: number }).__id__;
+      if (typeof childIdx === 'number') {
+        children.push(parseNodeTree(pool, childIdx));
+      }
+    }
+  }
+
+  return {
+    type: 'group',
+    id: generateUUID(),
+    name,
+    enabled,
+    transform,
+    children
+  };
+}
+
+function normalizeProjectRoot(rootNode: EffectNode): EffectGroupNode {
+  if (rootNode.type === 'group') return rootNode;
+  return {
+    type: 'group',
+    id: generateUUID(),
+    name: 'Root',
+    enabled: true,
+    transform: identityTransform(),
+    children: [rootNode]
+  };
+}
+
+export function parsePrefabToProject(jsonString: string, projectName?: string): ImportProjectResult {
+  const prefabArray = parsePool(jsonString);
+  const prefab = prefabArray.find(
+    item => (item as RawPrefabData)?.__type__ === 'cc.Prefab'
+  ) as { _name?: string; data?: { __id__?: number } } | undefined;
+
+  if (!prefab?.data || typeof prefab.data.__id__ !== 'number') {
+    throw new Error('无效的 .prefab 文件格式');
+  }
+
+  const rootIdx = prefab.data.__id__;
+  const hasParticleSystem = prefabArray.some(
+    item => (item as RawPrefabData)?.__type__ === 'cc.ParticleSystem'
+  );
+  if (!hasParticleSystem) {
+    throw new Error('该预制体不包含粒子系统组件（cc.ParticleSystem）');
+  }
+
+  const parsedRoot = parseNodeTree(prefabArray, rootIdx);
+  const name = projectName ?? prefab?._name ?? '导入特效';
+  const now = new Date().toISOString();
+
+  const project: EffectProject = {
+    version: FX_PROJECT_VERSION,
+    id: generateUUID(),
+    name,
+    settings: { targetEngine: 'cocos-creator-3.8' },
+    assetRegistry: createBuiltinAssetRegistry(),
+    root: normalizeProjectRoot(parsedRoot),
+    metadata: {
+      createdAt: now,
+      updatedAt: now,
+      description: `从 ${name}.prefab 导入`
+    }
+  };
+
+  return { project, unsupportedModules: [], warnings: [] };
+}
+
+export function parsePrefab(jsonString: string): ImportResult {
+  const prefabArray = parsePool(jsonString);
+
+  let psData: RawPrefabData | null = null;
+  let nodeData: { _name?: string } | null = null;
+
+  for (const item of prefabArray) {
+    if ((item as RawPrefabData)?.__type__ === 'cc.ParticleSystem') psData = item as RawPrefabData;
+    if ((item as RawPrefabData)?.__type__ === 'cc.Node') nodeData = item as { _name?: string };
+  }
+
+  if (!psData) throw new Error('该预制体不包含粒子系统组件（cc.ParticleSystem）');
+
+  const name = nodeData?._name || psData._name || '导入特效';
+  const config = parseParticleSystemConfig(prefabArray, psData);
 
   const effectConfig: EffectConfig = {
     id: generateUUID(),
