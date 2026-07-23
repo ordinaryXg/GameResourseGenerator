@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useProjectStore } from '@/stores/project-store';
+import { PRESET_PROJECTS } from '@/data/preset-projects';
 import {
   hasV1Sessions,
   loadV1Sessions,
@@ -14,7 +15,8 @@ interface ProjectWelcomeProps {
 
 export const ProjectWelcome: React.FC<ProjectWelcomeProps> = ({ onProjectReady }) => {
   const {
-    newProject, openProjectFromJson, loadProjectData, recentProjects, restoreAutosave
+    newProject, newProjectFromPreset, openProjectFromJson, loadProjectData,
+    recentProjects, restoreAutosave
   } = useProjectStore();
   const [v1Count, setV1Count] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -26,6 +28,11 @@ export const ProjectWelcome: React.FC<ProjectWelcomeProps> = ({ onProjectReady }
 
   const handleNew = () => {
     newProject();
+    onProjectReady();
+  };
+
+  const handlePreset = (presetId: string) => {
+    newProjectFromPreset(presetId);
     onProjectReady();
   };
 
@@ -102,7 +109,7 @@ export const ProjectWelcome: React.FC<ProjectWelcomeProps> = ({ onProjectReady }
     }}>
       <div style={{
         width: '100%',
-        maxWidth: 520,
+        maxWidth: 560,
         background: 'var(--bg-secondary)',
         border: '1px solid var(--border-color)',
         borderRadius: 12,
@@ -119,12 +126,46 @@ export const ProjectWelcome: React.FC<ProjectWelcomeProps> = ({ onProjectReady }
         </div>
 
         <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, margin: '20px 0' }}>
-          创建或打开 <code>.fxproj</code> 项目文件。项目采用 JSON + 同级 <code>assets/</code> 目录管理资产。
+          从预设组合快速开始，或创建/打开 <code>.fxproj</code> 项目文件。
         </p>
+
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>预设组合项目</div>
+          <div style={{ display: 'grid', gap: 8 }}>
+            {PRESET_PROJECTS.map(preset => (
+              <button
+                key={preset.id}
+                className="btn-sm"
+                onClick={() => handlePreset(preset.id)}
+                disabled={loading}
+                style={{
+                  padding: '10px 12px',
+                  textAlign: 'left',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 2
+                }}
+              >
+                <span style={{ fontWeight: 600, fontSize: 13 }}>
+                  {preset.name}
+                  <span style={{
+                    marginLeft: 8,
+                    fontSize: 10,
+                    color: 'var(--text-secondary)',
+                    fontWeight: 400
+                  }}>
+                    {preset.category} · 3 发射器
+                  </span>
+                </span>
+                <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{preset.description}</span>
+              </button>
+            ))}
+          </div>
+        </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <button className="btn-primary" onClick={handleNew} disabled={loading} style={{ padding: '10px 16px' }}>
-            新建项目
+            空白项目
           </button>
           <button className="btn-sm" onClick={handleOpen} disabled={loading} style={{ padding: '10px 16px' }}>
             打开项目…
@@ -144,7 +185,7 @@ export const ProjectWelcome: React.FC<ProjectWelcomeProps> = ({ onProjectReady }
           }}>
             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>发现 v1 旧数据</div>
             <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
-              检测到 {v1Count} 个旧版会话，可一键迁移为 v2 项目。
+              检测到 {v1Count} 个旧版会话，可一键迁移为 v2 项目（{v1Count === 1 ? '单发射器' : '合并为多发射器项目'}）。
             </div>
             <button className="btn-sm" onClick={handleMigrateAll}>迁移全部会话</button>
           </div>

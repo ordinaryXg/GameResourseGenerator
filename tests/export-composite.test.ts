@@ -65,7 +65,7 @@ describe('export-composite', () => {
     const exported = generateProjectPrefab(project, ctx);
     const imported = parsePrefabToProject(exported.prefabContent, project.name);
 
-    expect(imported.project.name).toBe('ExplosionCombo');
+    expect(imported.project.name).toBe('爆炸组合');
     const emitters = getEmitterNodes(imported.project.root);
     expect(emitters).toHaveLength(3);
     expect(emitters.map(e => e.name).sort()).toEqual(['Explosion', 'Glow', 'Smoke']);

@@ -1,0 +1,8 @@
+{
+  "format": "fx-studio-builtin-mesh",
+  "version": 1,
+  "kind": "octahedron",
+  "name": "octahedron",
+  "category": "特效",
+  "description": "八面体，水晶、能量碎片"
+}

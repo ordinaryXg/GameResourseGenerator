@@ -8,6 +8,7 @@ import {
   getNextEmitterName,
   createDefaultRootGroup
 } from '@/utils/project-factory';
+import { buildPresetProject } from '@/data/preset-projects';
 import {
   findNodeById,
   getFirstEmitter,
@@ -103,6 +104,7 @@ interface ProjectState {
   messages: ChatMessage[];
 
   newProject: (name?: string) => void;
+  newProjectFromPreset: (presetId: string) => void;
   loadProjectData: (project: EffectProject, path?: string | null) => void;
   openProjectFromJson: (json: string, path?: string | null) => void;
   saveProject: (path?: string) => Promise<boolean>;
@@ -200,6 +202,27 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       ...refreshBridge({ project, selectedNodeId: first?.id ?? null })
     });
     syncAssetStoreFromProject(project.assetRegistry);
+  },
+
+  newProjectFromPreset: (presetId) => {
+    const project = buildPresetProject(presetId);
+    const first = getFirstEmitter(project.root);
+    set({
+      project,
+      projectPath: null,
+      projectDir: null,
+      selectedNodeId: first?.id ?? null,
+      soloNodeId: null,
+      isDirty: true,
+      isLoaded: true,
+      messages: [],
+      ...emptyHistoryStacks(),
+      ...refreshBridge({ project, selectedNodeId: first?.id ?? null })
+    });
+    syncAssetStoreFromProject(project.assetRegistry);
+    if (first?.id) {
+      useAppStore.getState().selectNodeForInspector(first.id);
+    }
   },
 
   loadProjectData: (project, path = null) => {

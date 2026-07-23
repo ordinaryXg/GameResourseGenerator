@@ -1,0 +1,8 @@
+{
+  "format": "fx-studio-builtin-mesh",
+  "version": 1,
+  "kind": "cube",
+  "name": "cube",
+  "category": "基础",
+  "description": "立方体，碎片、方块"
+}

@@ -10,16 +10,18 @@ export function resolveAssetUrl(entry: AssetEntry, projectDir?: string | null): 
   if (entry.uri.startsWith('data:') || entry.uri.startsWith('blob:')) {
     return entry.uri;
   }
-  if (entry.source === 'builtin' && (entry.type === 'texture' || entry.type === 'spriteFrame')) {
-    const cached = dataUrlCache.get(entry.id);
-    if (cached) return cached;
-    const shape = getBuiltinShape(entry.id);
-    const url = createBuiltinTextureDataUrl(shape);
-    dataUrlCache.set(entry.id, url);
-    return url;
-  }
-  if (entry.uri.startsWith('builtin://')) {
-    return entry.uri.replace('builtin://', '/assets/builtin/');
+  if (entry.source === 'builtin') {
+    if (entry.uri.startsWith('builtin://')) {
+      return entry.uri.replace('builtin://', '/assets/builtin/');
+    }
+    if (entry.type === 'texture' || entry.type === 'spriteFrame') {
+      const cached = dataUrlCache.get(entry.id);
+      if (cached) return cached;
+      const shape = getBuiltinShape(entry.id);
+      const url = createBuiltinTextureDataUrl(shape);
+      dataUrlCache.set(entry.id, url);
+      return url;
+    }
   }
   if (entry.uri.startsWith('project://') && projectDir) {
     const rel = entry.uri.replace('project://', '');

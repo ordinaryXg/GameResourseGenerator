@@ -1,0 +1,8 @@
+{
+  "format": "fx-studio-builtin-mesh",
+  "version": 1,
+  "kind": "plane",
+  "name": "plane",
+  "category": "基础",
+  "description": "大平面，地面扬尘/贴花"
+}

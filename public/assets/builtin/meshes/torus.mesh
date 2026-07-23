@@ -1,0 +1,8 @@
+{
+  "format": "fx-studio-builtin-mesh",
+  "version": 1,
+  "kind": "torus",
+  "name": "torus",
+  "category": "特效",
+  "description": "圆环，魔法阵、冲击环"
+}

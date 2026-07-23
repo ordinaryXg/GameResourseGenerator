@@ -1,0 +1,8 @@
+{
+  "format": "fx-studio-builtin-mesh",
+  "version": 1,
+  "kind": "cone",
+  "name": "cone",
+  "category": "基础",
+  "description": "圆锥体，喷射/冲击波"
+}

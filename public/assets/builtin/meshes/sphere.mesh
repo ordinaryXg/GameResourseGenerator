@@ -1,0 +1,8 @@
+{
+  "format": "fx-studio-builtin-mesh",
+  "version": 1,
+  "kind": "sphere",
+  "name": "sphere",
+  "category": "基础",
+  "description": "球体，爆炸、能量球"
+}

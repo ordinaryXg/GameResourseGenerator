@@ -1,0 +1,8 @@
+{
+  "format": "fx-studio-builtin-mesh",
+  "version": 1,
+  "kind": "hemisphere",
+  "name": "hemisphere",
+  "category": "基础",
+  "description": "半球，地面爆发"
+}

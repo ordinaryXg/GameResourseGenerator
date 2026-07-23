@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "electron:build": "vite build && electron-builder"
+    "electron:build": "vite build && electron-builder",
+    "generate:builtin": "node scripts/generate-builtin-assets.mjs"
   },
   "keywords": [],
   "author": "",

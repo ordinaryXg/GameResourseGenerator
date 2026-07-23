@@ -1,0 +1,8 @@
+{
+  "format": "fx-studio-builtin-mesh",
+  "version": 1,
+  "kind": "cylinder",
+  "name": "cylinder",
+  "category": "基础",
+  "description": "圆柱，柱形喷射"
+}

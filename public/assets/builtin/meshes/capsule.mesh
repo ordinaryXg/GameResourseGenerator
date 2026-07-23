@@ -1,0 +1,8 @@
+{
+  "format": "fx-studio-builtin-mesh",
+  "version": 1,
+  "kind": "capsule",
+  "name": "capsule",
+  "category": "基础",
+  "description": "胶囊体，轨迹、子弹"
+}
