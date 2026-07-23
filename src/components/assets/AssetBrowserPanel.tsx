@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useAssetStore } from '@/stores/asset-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useAppStore } from '@/stores/app-store';
@@ -33,10 +33,11 @@ export const AssetBrowserPanel: React.FC<AssetBrowserPanelProps> = ({
   const projectPath = useProjectStore(s => s.projectPath);
   const removeProjectAsset = useProjectStore(s => s.removeProjectAsset);
   const getMergedAssets = useAssetStore(s => s.getMergedAssets);
-  const getAssetById = useAssetStore(s => s.getAssetById);
   const inspectorTarget = useAppStore(s => s.inspectorTarget);
   const selectAssetForInspector = useAppStore(s => s.selectAssetForInspector);
+  const clearInspectorTarget = useAppStore(s => s.clearInspectorTarget);
   const { showToastMessage } = useAppStore();
+  const gridRef = useRef<HTMLDivElement>(null);
 
   const selectedAssetId = inspectorTarget?.kind === 'asset' ? inspectorTarget.assetId : null;
 
@@ -49,6 +50,12 @@ export const AssetBrowserPanel: React.FC<AssetBrowserPanelProps> = ({
     if (q) list = list.filter(a => a.name.toLowerCase().includes(q) || assetTypeLabel(a.type).includes(q));
     return list;
   }, [getMergedAssets, filter, sourceTab, category]);
+
+  useEffect(() => {
+    if (!selectedAssetId || !gridRef.current) return;
+    const el = gridRef.current.querySelector(`[data-asset-id="${selectedAssetId}"]`);
+    el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [selectedAssetId, assets]);
 
   const handleDragStart = useCallback((e: React.DragEvent, asset: AssetEntry) => {
     writeAssetDragData(e.dataTransfer, { id: asset.id, type: asset.type, name: asset.name });
@@ -170,6 +177,7 @@ export const AssetBrowserPanel: React.FC<AssetBrowserPanelProps> = ({
         </div>
 
         <div
+          ref={gridRef}
           style={{
             flex: 1,
             overflow: 'auto',
@@ -178,6 +186,10 @@ export const AssetBrowserPanel: React.FC<AssetBrowserPanelProps> = ({
             gridTemplateColumns: 'repeat(auto-fill, minmax(76px, 1fr))',
             gap: 8,
             alignContent: 'start'
+          }}
+          onClick={(e) => {
+            if ((e.target as HTMLElement).closest('[data-asset-item]')) return;
+            clearInspectorTarget();
           }}
           onContextMenu={(e) => {
             if ((e.target as HTMLElement).closest('[data-asset-item]')) return;
@@ -192,6 +204,7 @@ export const AssetBrowserPanel: React.FC<AssetBrowserPanelProps> = ({
               <div
                 key={asset.id}
                 data-asset-item
+                data-asset-id={asset.id}
                 draggable
                 onClick={() => handleSelect(asset)}
                 onDragStart={(e) => handleDragStart(e, asset)}

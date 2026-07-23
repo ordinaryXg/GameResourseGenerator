@@ -222,6 +222,11 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       ...emptyHistoryStacks(),
       ...refreshBridge({ project, selectedNodeId })
     });
+    if (selectedNodeId) {
+      useAppStore.getState().selectNodeForInspector(selectedNodeId);
+    } else {
+      useAppStore.getState().clearInspectorTarget();
+    }
   },
 
   openProjectFromJson: (json, path = null) => {

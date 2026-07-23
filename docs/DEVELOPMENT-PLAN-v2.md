@@ -94,6 +94,22 @@ Phase 6  AI 适配 & 收尾（1 周）──► AI 降级 + 测试 + 文档
 
 ---
 
+## Phase 3.5：全局属性窗口（第 7 周，与 Phase 4 并行）
+
+| 步骤 | 任务 | 产出 | 优先级 | 状态 |
+|------|------|------|--------|------|
+| 3.5.1 | `PropertiesPanel` 路由：节点 / 资产二选一 | `src/components/properties/` | P0 | ✅ |
+| 3.5.2 | 资产浏览器选中同步至右侧；移除内嵌详情栏 | `AssetBrowserPanel.tsx` | P0 | ✅ |
+| 3.5.3 | 资产 CRUD + 通用操作条 | `asset-registry.ts`, `AssetEditorActions` | P0 | ✅ |
+| 3.5.4 | 分类型编辑器（贴图/精灵帧/材质/Shader/模型） | `editors/*AssetEditor.tsx` | P0 | ✅ |
+| 3.5.5 | Esc 清空属性选中；空状态快捷提示 | `PropertiesEmptyState`, 快捷键 | P1 | ✅ |
+| 3.5.6 | 右栏默认 320px；Shader 选中自动扩宽 | `inspector-target.ts` | P1 | ✅ |
+| 3.5.7 | 贴图导入落盘 `assets/textures/` | `useAssetImport.ts` | P2 | 待办 |
+
+**Phase 3.5 完成标准**：单击资产在右侧编辑属性；内置资产可复制到项目后修改；Esc 可清空属性面板。
+
+---
+
 ## Phase 4：导出 / 导入升级（第 7–8.5 周）
 
 | 步骤 | 任务 | 产出 | 优先级 | 预估 |

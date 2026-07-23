@@ -19,6 +19,14 @@ describe('asset-registry', () => {
     expect(next[0].meta?.height).toBe(32);
   });
 
+  it('patchAssetInRegistry with updater function', () => {
+    const next = patchAssetInRegistry([sample], 'a1', (a) => ({
+      ...a,
+      meta: { ...a.meta, width: 128 }
+    }));
+    expect(next[0].meta?.width).toBe(128);
+  });
+
   it('duplicateAssetEntry creates project copy with new id', () => {
     const dup = duplicateAssetEntry(sample);
     expect(dup.id).not.toBe(sample.id);

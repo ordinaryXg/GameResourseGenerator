@@ -1,13 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '@/stores/app-store';
 import { useProjectStore } from '@/stores/project-store';
+import { useAssetStore } from '@/stores/asset-store';
 import type { AssetEntry } from '@/types/asset';
 import { assetToEmitterRefsPatch } from '@/utils/asset-apply';
 import { findNodeById } from '@/utils/project-tree';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { NodeEditor } from '@/components/editor/NodeEditor';
 import { PropertiesPanel } from '@/components/properties/PropertiesPanel';
-import { useAssetStore } from '@/stores/asset-store';
+import { resolveInspectorTarget } from '@/utils/inspector-target';
 import { PreviewPanel } from '@/components/preview/PreviewPanel';
 import { TemplateLibrary } from '@/components/templates/TemplateLibrary';
 import { HierarchyPanel } from '@/components/hierarchy/HierarchyPanel';
@@ -29,7 +30,7 @@ const App: React.FC = () => {
     panelSizes, aiSettings, setEffectType, setPreviewVisible, setTemplateLibraryOpen,
     setSettingsOpen, setExportOpen, setActivePanel, adjustPanelSize, showToastMessage,
     aiPanelVisible, setAiPanelVisible, assetBrowserVisible, setAssetBrowserVisible,
-    inspectorTarget
+    inspectorTarget, inspectorSuppressFallback
   } = useAppStore();
 
   const {
@@ -124,15 +125,16 @@ const App: React.FC = () => {
   const getAssetById = useAssetStore(s => s.getAssetById);
 
   const inspectorLabel = useMemo(() => {
-    if (!inspectorTarget) return '无';
-    if (inspectorTarget.kind === 'asset') {
-      const asset = getAssetById(inspectorTarget.assetId);
+    const active = resolveInspectorTarget(inspectorTarget, selectedNodeId, inspectorSuppressFallback);
+    if (!active) return '无';
+    if (active.kind === 'asset') {
+      const asset = getAssetById(active.assetId);
       return asset?.name ?? '无';
     }
     if (!project) return '无';
-    const node = findNodeById(project.root, inspectorTarget.nodeId);
+    const node = findNodeById(project.root, active.nodeId);
     return node?.name ?? '无';
-  }, [inspectorTarget, project, getAssetById]);
+  }, [inspectorTarget, inspectorSuppressFallback, selectedNodeId, project, getAssetById]);
 
   const handleUndo = useCallback(() => {
     if (canUndoNow) {

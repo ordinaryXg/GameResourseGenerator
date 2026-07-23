@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { AISettings, EffectType } from '@/types/effect';
 import type { InspectorTarget } from '@/types/inspector';
+import { migratePanelSizes } from '@/utils/inspector-target';
 
 export type AppMode = 'demo' | 'llm';
 export type Lang = 'zh' | 'en';
@@ -20,15 +21,10 @@ function loadPanelSizes(): PanelSizes {
     const raw = localStorage.getItem(PANEL_SIZES_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<PanelSizes>;
-      return {
-        left: parsed.left ?? 300,
-        right: parsed.right ?? 280,
-        preview: parsed.preview ?? 280,
-        assets: parsed.assets ?? 180
-      };
+      return migratePanelSizes(parsed);
     }
   } catch { /* ignore */ }
-  return { left: 300, right: 280, preview: 280, assets: 180 };
+  return migratePanelSizes({});
 }
 
 function loadPreviewBackground(): string {
@@ -69,6 +65,7 @@ interface AppState {
   assetBrowserVisible: boolean;
   inspectorTarget: InspectorTarget | null;
   shaderDraft: string | null;
+  inspectorSuppressFallback: boolean;
 
   setAISettings: (s: Partial<AISettings>) => void;
   setAppMode: (m: AppMode) => void;
@@ -124,6 +121,7 @@ export const useAppStore = create<AppState>((set) => ({
   assetBrowserVisible: true,
   inspectorTarget: null,
   shaderDraft: null,
+  inspectorSuppressFallback: false,
 
   setAISettings: (s) => set(state => ({ aiSettings: { ...state.aiSettings, ...s }, appMode: s.apiKey !== undefined ? (s.apiKey ? 'llm' : 'demo') : state.appMode })),
   setAppMode: (m) => set({ appMode: m }),
@@ -163,9 +161,15 @@ export const useAppStore = create<AppState>((set) => ({
   setNewEffectModalOpen: (v) => set({ newEffectModalOpen: v }),
   setAiPanelVisible: (v) => set({ aiPanelVisible: v }),
   setAssetBrowserVisible: (v) => set({ assetBrowserVisible: v }),
-  setInspectorTarget: (t) => set({ inspectorTarget: t }),
-  selectAssetForInspector: (assetId) => set({ inspectorTarget: { kind: 'asset', assetId } }),
-  selectNodeForInspector: (nodeId) => set({ inspectorTarget: { kind: 'node', nodeId } }),
-  clearInspectorTarget: () => set({ inspectorTarget: null }),
+  setInspectorTarget: (t) => set({ inspectorTarget: t, inspectorSuppressFallback: false }),
+  selectAssetForInspector: (assetId) => set({
+    inspectorTarget: { kind: 'asset', assetId },
+    inspectorSuppressFallback: false
+  }),
+  selectNodeForInspector: (nodeId) => set({
+    inspectorTarget: { kind: 'node', nodeId },
+    inspectorSuppressFallback: false
+  }),
+  clearInspectorTarget: () => set({ inspectorTarget: null, inspectorSuppressFallback: true }),
   setShaderDraft: (code) => set({ shaderDraft: code })
 }));
