@@ -17,6 +17,8 @@ export interface AssetEntry {
     shape?: string;
     textureId?: string;
     blend?: string;
+    description?: string;
+    category?: string;
   };
 }
 

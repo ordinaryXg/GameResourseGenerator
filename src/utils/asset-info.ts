@@ -48,6 +48,12 @@ export function buildAssetInfoView(asset: AssetEntry, linkedTextureName?: string
     const blend = getBlendModeFromMaterialAsset(asset);
     if (blend) fields.push({ label: '混合模式', value: blendModeLabel(blend) });
   }
+  if (asset.meta?.category) {
+    fields.push({ label: '分类', value: asset.meta.category });
+  }
+  if (asset.meta?.description) {
+    fields.push({ label: '说明', value: asset.meta.description });
+  }
   if (asset.meta?.width && asset.meta?.height) {
     fields.push({ label: '尺寸', value: `${asset.meta.width} × ${asset.meta.height}` });
   }
