@@ -46,7 +46,7 @@ interface AppState {
   previewPlaying: boolean;
   previewBackground: string;
   showAxes: boolean;
-  activePanel: 'chat' | 'effects' | 'history';
+  activePanel: 'hierarchy' | 'ai';
   selectedModuleKey: string | null;
   panelSizes: PanelSizes;
   settingsOpen: boolean;
@@ -55,6 +55,7 @@ interface AppState {
   showToast: string | null;
   lang: Lang;
   newEffectModalOpen: boolean;
+  aiPanelVisible: boolean;
 
   setAISettings: (s: Partial<AISettings>) => void;
   setAppMode: (m: AppMode) => void;
@@ -67,7 +68,7 @@ interface AppState {
   setPreviewPlaying: (v: boolean) => void;
   setPreviewBackground: (color: string) => void;
   setShowAxes: (v: boolean) => void;
-  setActivePanel: (p: 'chat' | 'effects' | 'history') => void;
+  setActivePanel: (p: 'hierarchy' | 'ai') => void;
   setSelectedModuleKey: (key: string | null) => void;
   adjustPanelSize: (key: keyof PanelSizes, delta: number) => void;
   setPanelSize: (key: keyof PanelSizes, value: number) => void;
@@ -77,6 +78,7 @@ interface AppState {
   showToastMessage: (msg: string) => void;
   setLang: (l: Lang) => void;
   setNewEffectModalOpen: (v: boolean) => void;
+  setAiPanelVisible: (v: boolean) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -90,7 +92,7 @@ export const useAppStore = create<AppState>((set) => ({
   previewPlaying: true,
   previewBackground: loadPreviewBackground(),
   showAxes: true,
-  activePanel: 'chat',
+  activePanel: 'hierarchy',
   selectedModuleKey: null,
   panelSizes: loadPanelSizes(),
   settingsOpen: false,
@@ -99,6 +101,7 @@ export const useAppStore = create<AppState>((set) => ({
   showToast: null,
   lang: 'zh',
   newEffectModalOpen: false,
+  aiPanelVisible: false,
 
   setAISettings: (s) => set(state => ({ aiSettings: { ...state.aiSettings, ...s }, appMode: s.apiKey !== undefined ? (s.apiKey ? 'llm' : 'demo') : state.appMode })),
   setAppMode: (m) => set({ appMode: m }),
@@ -134,5 +137,6 @@ export const useAppStore = create<AppState>((set) => ({
   setTemplateLibraryOpen: (v) => set({ templateLibraryOpen: v }),
   showToastMessage: (msg) => { set({ showToast: msg }); setTimeout(() => set({ showToast: null }), 3000); },
   setLang: (l) => set({ lang: l }),
-  setNewEffectModalOpen: (v) => set({ newEffectModalOpen: v })
+  setNewEffectModalOpen: (v) => set({ newEffectModalOpen: v }),
+  setAiPanelVisible: (v) => set({ aiPanelVisible: v })
 }));

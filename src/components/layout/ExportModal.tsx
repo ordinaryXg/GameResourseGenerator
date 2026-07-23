@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { useAppStore } from '@/stores/app-store';
-import { useSessionStore } from '@/stores/session-store';
+import { useProjectStore } from '@/stores/project-store';
 import { exportToCocosProject } from '@/utils/export-pipeline';
 import { getCompatibilityReport, exportToEngine } from '@/utils/multi-engine-export';
 import type { TargetEngine } from '@/utils/multi-engine-export';
@@ -14,7 +14,7 @@ const ENGINE_OPTIONS: { value: TargetEngine; label: string }[] = [
 
 export const ExportModal: React.FC = () => {
   const { cocosProjectPath, setCocosProjectPath, setExportOpen, showToastMessage } = useAppStore();
-  const { currentEffect } = useSessionStore();
+  const { currentEffect } = useProjectStore();
   const [projectPath, setProjectPath] = useState(cocosProjectPath);
   const [exporting, setExporting] = useState(false);
   const [targetEngine, setTargetEngine] = useState<TargetEngine>('cocos');
@@ -130,6 +130,10 @@ export const ExportModal: React.FC = () => {
           <div>导出文件：</div>
           <div>• {currentEffect.name}.prefab</div>
           <div>• {currentEffect.name}.prefab.meta</div>
+          <div>• {currentEffect.name}-particle.mtl</div>
+          <div>• {currentEffect.name}-particle.mtl.meta</div>
+          <div>• particle-circle.png（默认圆形粒子贴图）</div>
+          <div>• particle-circle.png.meta</div>
           {projectPath && (
             <div style={{ marginTop: 4 }}>
               目标路径：assets/effects/{currentEffect.id.substring(0, 8)}-/

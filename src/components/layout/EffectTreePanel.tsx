@@ -3,6 +3,7 @@ import { useSessionStore } from '@/stores/session-store';
 import { useAppStore } from '@/stores/app-store';
 import { MODULE_DEFS } from '@/constants/modules';
 import { ContextMenu } from '@/components/layout/ContextMenu';
+import { RenameModal } from '@/components/layout/RenameModal';
 import type { Particle3DConfig } from '@/types/effect';
 
 type MenuTarget =
@@ -25,6 +26,7 @@ export const EffectTreePanel: React.FC = () => {
   const [search, setSearch] = useState('');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set(activeSessionId ? [activeSessionId] : []));
   const [menu, setMenu] = useState<MenuTarget | null>(null);
+  const [renameTarget, setRenameTarget] = useState<{ id: string; name: string } | null>(null);
 
   const filtered = search
     ? sessions.filter(s => s.name.toLowerCase().includes(search.toLowerCase()))
@@ -73,8 +75,7 @@ export const EffectTreePanel: React.FC = () => {
       { label: '打开特效', onClick: () => handleSelectEffect(menu.sessionId) },
       { label: '重命名', onClick: () => {
         const session = sessions.find(s => s.id === menu.sessionId);
-        const name = window.prompt('输入新名称', session?.name || '');
-        if (name?.trim()) renameSession(menu.sessionId, name.trim());
+        if (session) setRenameTarget({ id: menu.sessionId, name: session.name });
       }},
       { label: '复制', onClick: () => duplicateSession(menu.sessionId) },
       { label: expandedIds.has(menu.sessionId) ? '折叠' : '展开', onClick: () => toggleExpand(menu.sessionId) },
@@ -204,6 +205,13 @@ export const EffectTreePanel: React.FC = () => {
           onClose={() => setMenu(null)}
         />
       )}
+
+      <RenameModal
+        open={!!renameTarget}
+        initialName={renameTarget?.name || ''}
+        onConfirm={(name) => renameTarget && renameSession(renameTarget.id, name)}
+        onClose={() => setRenameTarget(null)}
+      />
     </div>
   );
 };

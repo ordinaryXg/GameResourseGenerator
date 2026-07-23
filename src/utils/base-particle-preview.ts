@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { Particle3DConfig, RangeValue } from '@/types/effect';
+import { composeParticleColor, sampleStartColor } from '@/utils/gradient-utils';
 
 export interface AxisScreenVector {
   id: 'x' | 'y' | 'z';
@@ -11,8 +12,7 @@ export interface AxisScreenVector {
 interface BaseParticle {
   position: THREE.Vector3;
   velocity: THREE.Vector3;
-  startColor: THREE.Color;
-  endColor: THREE.Color;
+  startColorSample: [number, number, number, number];
   life: number;
   maxLife: number;
   elapsed: number;
@@ -28,7 +28,7 @@ export abstract class BaseParticlePreview {
   protected isPlaying = true;
   protected elapsedTime = 0;
   protected emitTimer = 0;
-  protected burstsTriggered: Set<number> = new Set();
+  protected burstsTriggered: Set<string> = new Set();
   protected animationId: number | null = null;
   protected container: HTMLElement | null = null;
   protected config: Particle3DConfig | null = null;
@@ -98,6 +98,7 @@ export abstract class BaseParticlePreview {
   setConfig(config: Particle3DConfig) {
     this.config = JSON.parse(JSON.stringify(config));
     this.resetSimulation();
+    this.isPlaying = true;
   }
 
   setMaxParticles(max: number) { this.maxParticles = Math.min(max, 500); }
@@ -155,20 +156,43 @@ export abstract class BaseParticlePreview {
     const cfg = this.config;
     this.elapsedTime += dt;
 
-    if (!cfg.mainModule.loop && this.elapsedTime > cfg.mainModule.duration && this.particles.length === 0) {
-      this.isPlaying = false; return;
+    const duration = cfg.mainModule.duration;
+    const shouldLoop = cfg.mainModule.loop;
+
+    if (shouldLoop && duration > 0 && this.elapsedTime >= duration) {
+      const overflow = this.elapsedTime - duration;
+      this.resetSimulation();
+      this.elapsedTime = overflow;
     }
 
-    if (cfg.mainModule.rateOverTime > 0) {
-      this.emitTimer += dt;
-      const interval = 1 / cfg.mainModule.rateOverTime;
-      while (this.emitTimer >= interval) { this.emitTimer -= interval; this.emitParticle(cfg); }
+    const pastDuration = !shouldLoop && duration > 0 && this.elapsedTime > duration;
+
+    if (pastDuration && this.particles.length === 0) {
+      this.isPlaying = false;
+      return;
     }
 
-    for (const burst of cfg.mainModule.bursts) {
-      if (!this.burstsTriggered.has(burst.time) && this.elapsedTime >= burst.time) {
-        this.burstsTriggered.add(burst.time);
-        for (let i = 0; i < burst.count; i++) this.emitParticle(cfg);
+    if (!pastDuration) {
+      if (cfg.mainModule.rateOverTime > 0) {
+        this.emitTimer += dt;
+        const interval = 1 / cfg.mainModule.rateOverTime;
+        while (this.emitTimer >= interval) {
+          this.emitTimer -= interval;
+          this.emitParticle(cfg);
+        }
+      }
+
+      for (const burst of cfg.mainModule.bursts) {
+        const burstKey = `${burst.time}-${burst.count}`;
+        const cycles = burst.cycles ?? 1;
+        const interval = burst.interval ?? 1;
+        for (let c = 0; c < cycles; c++) {
+          const triggerTime = burst.time + c * interval;
+          if (!this.burstsTriggered.has(`${burstKey}-${c}`) && this.elapsedTime >= triggerTime) {
+            this.burstsTriggered.add(`${burstKey}-${c}`);
+            for (let i = 0; i < burst.count; i++) this.emitParticle(cfg);
+          }
+        }
       }
     }
 
@@ -185,9 +209,14 @@ export abstract class BaseParticlePreview {
       this.applyForces(p, cfg, dtCapped);
 
       p.sprite.position.copy(p.position);
-      const color = new THREE.Color().lerpColors(p.startColor, p.endColor, p.life);
-      p.material.color = color;
-      p.material.opacity = 1 - p.life;
+      const rgba = composeParticleColor(
+        p.startColorSample,
+        cfg.colorOverLifetime.color,
+        p.life,
+        cfg.colorOverLifetime.enabled
+      );
+      p.material.color.setRGB(rgba[0], rgba[1], rgba[2]);
+      p.material.opacity = rgba[3];
       this.updateSpriteScale(p, cfg);
     }
 
@@ -202,10 +231,13 @@ export abstract class BaseParticlePreview {
     const vel = this.getEmitVelocity(cfg);
     const lifetime = this.getValueFromRange(cfg.mainModule.startLifetime);
     const size = this.getValueFromRange(cfg.mainModule.startSize3D.x);
-    const startKeys = cfg.mainModule.startColor.keys;
-    const colorKeys = cfg.colorOverLifetime.enabled ? cfg.colorOverLifetime.color.keys : startKeys;
-    const c0 = startKeys[0]?.color || [1, 1, 1, 1];
-    const c1 = colorKeys[colorKeys.length - 1]?.color || startKeys[startKeys.length - 1]?.color || [1, 1, 1, 0];
+    const startSample = sampleStartColor(cfg.mainModule.startColor);
+    const initialRgba = composeParticleColor(
+      startSample,
+      cfg.colorOverLifetime.color,
+      0,
+      cfg.colorOverLifetime.enabled
+    );
 
     const canvas = document.createElement('canvas'); canvas.width = 32; canvas.height = 32;
     const ctx = canvas.getContext('2d')!;
@@ -214,13 +246,31 @@ export abstract class BaseParticlePreview {
     ctx.fillStyle = g; ctx.fillRect(0,0,32,32);
 
     const texture = new THREE.CanvasTexture(canvas);
-    const material = new THREE.SpriteMaterial({ map: texture, blending: cfg.rendererModule.renderMode === 'billboard' ? THREE.NormalBlending : THREE.AdditiveBlending, depthWrite: false, depthTest: true, transparent: true, color: new THREE.Color(c0[0],c0[1],c0[2]) });
+    const useAdditive = cfg.rendererModule.renderMode !== 'billboard';
+    const material = new THREE.SpriteMaterial({
+      map: texture,
+      blending: useAdditive ? THREE.AdditiveBlending : THREE.NormalBlending,
+      depthWrite: false,
+      depthTest: true,
+      transparent: true,
+      color: new THREE.Color(initialRgba[0], initialRgba[1], initialRgba[2]),
+      opacity: initialRgba[3]
+    });
     const sprite = new THREE.Sprite(material);
     sprite.position.copy(pos);
     sprite.scale.setScalar(size);
 
     this.scene.add(sprite);
-    this.particles.push({ position: pos.clone(), velocity: vel, startColor: new THREE.Color(c0[0],c0[1],c0[2]), endColor: new THREE.Color(c1[0],c1[1],c1[2]), life: 0, maxLife: lifetime, elapsed: 0, sprite, material });
+    this.particles.push({
+      position: pos.clone(),
+      velocity: vel,
+      startColorSample: startSample,
+      life: 0,
+      maxLife: lifetime,
+      elapsed: 0,
+      sprite,
+      material
+    });
   }
 
   protected getValueFromRange(range: RangeValue): number {

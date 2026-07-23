@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { useSessionStore } from '@/stores/session-store';
+import { useProjectStore } from '@/stores/project-store';
 import { useAppStore } from '@/stores/app-store';
-import type { Particle3DConfig, RangeValue, ShapeType, RenderMode } from '@/types/effect';
+import type { Particle3DConfig, RangeValue, ShapeType, RenderMode, BurstConfig } from '@/types/effect';
 import { GradientEditor } from './GradientEditor';
 import { CurveEditor } from './CurveEditor';
 
@@ -95,7 +95,7 @@ const RangeInput: React.FC<{
 );
 
 export const InspectorPanel: React.FC = () => {
-  const { currentEffect, updateEffectConfig } = useSessionStore();
+  const { currentEffect, updateEffectConfig } = useProjectStore();
   const { selectedModuleKey } = useAppStore();
   const config = currentEffect?.config as Particle3DConfig | undefined;
 
@@ -108,6 +108,27 @@ export const InspectorPanel: React.FC = () => {
       }
     }));
   }, [updateEffectConfig]);
+
+  const updateBursts = useCallback((bursts: BurstConfig[]) => {
+    updateEffectConfig((prev) => ({
+      ...prev,
+      config: {
+        ...prev.config as Particle3DConfig,
+        mainModule: { ...(prev.config as Particle3DConfig).mainModule, bursts }
+      }
+    }));
+  }, [updateEffectConfig]);
+
+  const updateBurstAt = useCallback((index: number, patch: Partial<BurstConfig>) => {
+    if (!config) return;
+    const bursts = config.mainModule.bursts.map((b, i) => i === index ? { ...b, ...patch } : b);
+    updateBursts(bursts);
+  }, [config, updateBursts]);
+
+  const removeBurstAt = useCallback((index: number) => {
+    if (!config) return;
+    updateBursts(config.mainModule.bursts.filter((_, i) => i !== index));
+  }, [config, updateBursts]);
 
   const toggleModule = useCallback((moduleKey: string) => {
     updateEffectConfig((prev) => {
@@ -126,7 +147,7 @@ export const InspectorPanel: React.FC = () => {
   const updateModule = useCallback((moduleKey: string, updates: Record<string, unknown>) => {
     updateEffectConfig((prev) => {
       const cfg = prev.config as Particle3DConfig;
-      const module = cfg[moduleKey as keyof Particle3DConfig] as Record<string, unknown> & { enabled?: boolean };
+      const module = cfg[moduleKey as keyof Particle3DConfig] as unknown as Record<string, unknown> & { enabled?: boolean };
       return {
         ...prev,
         config: {
@@ -160,7 +181,13 @@ export const InspectorPanel: React.FC = () => {
       <div className="panel-header">属性检查器</div>
 
       <Section id="section-mainModule" title="主模块" highlighted={isHighlighted('mainModule')}>
-        <RangeInput label="运行时长 (秒)" value={config.mainModule.startLifetime}
+        <div style={{ marginBottom: 6 }}>
+          <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>系统时长 (秒)</label>
+          <input type="number" value={config.mainModule.duration}
+            onChange={(e) => updateMain({ duration: parseFloat(e.target.value) || 1 })}
+            min={0.1} max={120} step={0.1} style={{ width: '100%', padding: '4px 8px', fontSize: 12 }} />
+        </div>
+        <RangeInput label="粒子寿命 (秒)" value={config.mainModule.startLifetime}
           onChange={(v) => updateMain({ startLifetime: v })} min={0.01} max={60} />
         <div style={{ marginBottom: 6 }}>
           <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>最大粒子数</label>
@@ -189,6 +216,9 @@ export const InspectorPanel: React.FC = () => {
         </div>
         <div style={{ marginBottom: 6 }}>
           <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>初始颜色</label>
+          <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 4 }}>
+            与「颜色随生命周期」相乘；通常保持白色，仅在生命周期模块中编辑渐变。
+          </div>
           <GradientEditor
             value={config.mainModule.startColor}
             onChange={(v) => updateMain({ startColor: v })}
@@ -350,26 +380,57 @@ export const InspectorPanel: React.FC = () => {
         </div>
       </Section>
 
-      <Section title="爆发式发射 (Bursts)" defaultOpen={false}>
-        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>
-          爆发数：{config.mainModule.bursts.length} 个
+      <Section
+        id="section-burstModule"
+        title="爆发喷射"
+        defaultOpen={config.mainModule.bursts.length > 0}
+        highlighted={isHighlighted('burstModule')}
+      >
+        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
+          {config.mainModule.bursts.length === 0 ? '暂无爆发事件，点击下方添加' : `共 ${config.mainModule.bursts.length} 个爆发事件`}
         </div>
         {config.mainModule.bursts.map((burst, i) => (
-          <div key={i} style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 2 }}>
-            t={burst.time}s, count={burst.count}, cycles={burst.cycles ?? 1}
+          <div key={i} style={{
+            border: '1px solid var(--border-color)', borderRadius: 6,
+            padding: 8, marginBottom: 8, background: 'var(--bg-secondary)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <span style={{ fontSize: 12, fontWeight: 600 }}>爆发 #{i + 1}</span>
+              <button className="btn-sm" onClick={() => removeBurstAt(i)} style={{ color: 'var(--error)', fontSize: 11 }}>
+                删除
+              </button>
+            </div>
+            <div style={{ marginBottom: 4 }}>
+              <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>触发时间 (秒)</label>
+              <input type="number" value={burst.time} min={0} step={0.01}
+                onChange={(e) => updateBurstAt(i, { time: parseFloat(e.target.value) || 0 })}
+                style={{ width: '100%', padding: '4px 8px', fontSize: 12 }} />
+            </div>
+            <div style={{ marginBottom: 4 }}>
+              <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>粒子数量</label>
+              <input type="number" value={burst.count} min={1} max={10000}
+                onChange={(e) => updateBurstAt(i, { count: parseInt(e.target.value) || 1 })}
+                style={{ width: '100%', padding: '4px 8px', fontSize: 12 }} />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+              <div>
+                <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>重复次数</label>
+                <input type="number" value={burst.cycles ?? 1} min={1} max={100}
+                  onChange={(e) => updateBurstAt(i, { cycles: parseInt(e.target.value) || 1 })}
+                  style={{ width: '100%', padding: '4px 8px', fontSize: 12 }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>间隔 (秒)</label>
+                <input type="number" value={burst.interval ?? 1} min={0} step={0.1}
+                  onChange={(e) => updateBurstAt(i, { interval: parseFloat(e.target.value) || 0 })}
+                  style={{ width: '100%', padding: '4px 8px', fontSize: 12 }} />
+              </div>
+            </div>
           </div>
         ))}
         <button
-          onClick={() => {
-            const newBursts = [...config.mainModule.bursts, { time: 0, count: 50 }];
-            updateEffectConfig((prev) => ({
-              ...prev,
-              config: {
-                ...prev.config as Particle3DConfig,
-                mainModule: { ...(prev.config as Particle3DConfig).mainModule, bursts: newBursts }
-              }
-            }));
-          }}
+          className="btn-sm"
+          onClick={() => updateBursts([...config.mainModule.bursts, { time: 0, count: 50, cycles: 1, interval: 1 }])}
           style={{ fontSize: 11, marginTop: 4 }}
         >+ 添加爆发</button>
       </Section>
@@ -382,21 +443,26 @@ export const InspectorPanel: React.FC = () => {
         <div style={{ marginBottom: 6 }}>
           <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>渲染模式</label>
           <select value={config.rendererModule.renderMode}
-            onChange={(e) => {
-              updateEffectConfig((prev) => ({
-                ...prev,
-                config: {
-                  ...prev.config as Particle3DConfig,
-                  rendererModule: { ...(prev.config as Particle3DConfig).rendererModule, renderMode: e.target.value as RenderMode }
-                }
-              }));
-            }}
+            onChange={(e) => updateModule('rendererModule', { renderMode: e.target.value as RenderMode })}
             style={{ width: '100%', padding: '4px 8px', fontSize: 12 }}
           >
-            <option value="billboard">公告板 (Billboard)</option>
-            <option value="stretchedBillboard">拉伸公告板 (Stretched)</option>
-            <option value="mesh">网格 (Mesh)</option>
+            <option value="billboard">公告板 (Billboard) — 0</option>
+            <option value="stretchedBillboard">拉伸公告板 (Stretched Billboard) — 1</option>
+            <option value="horizontalBillboard">水平公告板 (Horizontal Billboard) — 2</option>
+            <option value="verticalBillboard">垂直公告板 (Vertical Billboard) — 3</option>
+            <option value="mesh">网格 (Mesh) — 4</option>
           </select>
+        </div>
+        {config.rendererModule.renderMode === 'stretchedBillboard' && (
+          <>
+            <RangeInput label="速度缩放 (Velocity Scale)" value={{ mode: 'constant', constant: config.rendererModule.velocityScale ?? 1 }}
+              onChange={(v) => updateModule('rendererModule', { velocityScale: v.constant ?? 1 })} min={0} max={10} step={0.1} />
+            <RangeInput label="长度缩放 (Length Scale)" value={{ mode: 'constant', constant: config.rendererModule.lengthScale ?? 1 }}
+              onChange={(v) => updateModule('rendererModule', { lengthScale: v.constant ?? 1 })} min={0} max={10} step={0.1} />
+          </>
+        )}
+        <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
+          粒子材质使用内置 builtin-particle，贴图由导出时自动附加。
         </div>
       </Section>
     </div>

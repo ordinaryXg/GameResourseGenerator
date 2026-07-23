@@ -1,18 +1,17 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useAppStore } from '@/stores/app-store';
-import { useSessionStore } from '@/stores/session-store';
+import { useProjectStore } from '@/stores/project-store';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { NodeEditor } from '@/components/editor/NodeEditor';
 import { InspectorPanel } from '@/components/inspector/InspectorPanel';
 import { PreviewPanel } from '@/components/preview/PreviewPanel';
 import { TemplateLibrary } from '@/components/templates/TemplateLibrary';
-import { EffectTreePanel } from '@/components/layout/EffectTreePanel';
-import { VersionHistoryPanel } from '@/components/layout/VersionHistoryPanel';
+import { HierarchyPanel } from '@/components/hierarchy/HierarchyPanel';
+import { ProjectWelcome } from '@/components/layout/ProjectWelcome';
 import { ShaderEditor } from '@/components/editor/ShaderEditor';
 import { AnimationEditor } from '@/components/editor/AnimationEditor';
 import { SettingsModal } from '@/components/layout/SettingsModal';
 import { ExportModal } from '@/components/layout/ExportModal';
-import { NewEffectModal } from '@/components/layout/NewEffectModal';
 import { ResizeHandle } from '@/components/layout/ResizeHandle';
 import { usePrefabImport } from '@/hooks/usePrefabImport';
 import { useAppShortcuts } from '@/hooks/useKeyboardShortcuts';
@@ -23,12 +22,15 @@ const App: React.FC = () => {
     settingsOpen, exportOpen, showToast, isStreaming, activePanel,
     panelSizes, aiSettings, setEffectType, setPreviewVisible, setTemplateLibraryOpen,
     setSettingsOpen, setExportOpen, setActivePanel, adjustPanelSize, showToastMessage,
-    newEffectModalOpen, setNewEffectModalOpen
+    aiPanelVisible, setAiPanelVisible
   } = useAppStore();
 
   const {
-    sessions, currentEffect, createSession, syncEffectToSession
-  } = useSessionStore();
+    project, currentEffect, isLoaded, isDirty, projectPath,
+    newProject, saveProject, saveProjectAs, closeProject, syncAutosave
+  } = useProjectStore();
+
+  const [showWelcome, setShowWelcome] = useState(true);
 
   const {
     isDragOver, fileInputRef,
@@ -39,28 +41,43 @@ const App: React.FC = () => {
   useAppShortcuts();
 
   useEffect(() => {
-    if (sessions.length > 0) {
-      const last = sessions[sessions.length - 1];
-      useSessionStore.setState({ activeSessionId: last.id, currentEffect: last.effect, messages: last.messages, isLoaded: true });
-    } else {
-      createSession();
-      useSessionStore.setState({ isLoaded: true });
+    useProjectStore.setState({ isLoaded: true });
+    if (useProjectStore.getState().project) {
+      setShowWelcome(false);
     }
   }, []);
 
   useEffect(() => {
-    const onUnload = () => syncEffectToSession();
+    if (!project) return;
+    const timer = setInterval(() => syncAutosave(), 30000);
+    return () => clearInterval(timer);
+  }, [project, syncAutosave]);
+
+  useEffect(() => {
+    const onUnload = () => syncAutosave();
     window.addEventListener('beforeunload', onUnload);
     return () => window.removeEventListener('beforeunload', onUnload);
-  }, [syncEffectToSession]);
-
-  const handleNewEffect = useCallback(() => {
-    setNewEffectModalOpen(true);
-  }, [setNewEffectModalOpen]);
+  }, [syncAutosave]);
 
   const handleExport = useCallback(() => {
     if (currentEffect) setExportOpen(true);
   }, [currentEffect, setExportOpen]);
+
+  const handleSave = useCallback(async () => {
+    if (!project) return;
+    if (projectPath) {
+      const ok = await saveProject();
+      if (ok) showToastMessage('项目已保存');
+    } else {
+      const ok = await saveProjectAs();
+      if (ok) showToastMessage('项目已保存');
+    }
+  }, [project, projectPath, saveProject, saveProjectAs, showToastMessage]);
+
+  const handleOpenProject = useCallback(async () => {
+    closeProject();
+    setShowWelcome(true);
+  }, [closeProject]);
 
   const resizeLeft = useCallback((d: number) => adjustPanelSize('left', d), [adjustPanelSize]);
   const resizeRight = useCallback((d: number) => adjustPanelSize('right', -d), [adjustPanelSize]);
@@ -68,6 +85,14 @@ const App: React.FC = () => {
 
   if (templateLibraryOpen) {
     return <TemplateLibrary />;
+  }
+
+  if (!isLoaded || (showWelcome && !project)) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+        <ProjectWelcome onProjectReady={() => setShowWelcome(false)} />
+      </div>
+    );
   }
 
   return (
@@ -80,40 +105,14 @@ const App: React.FC = () => {
 
         <div className="toolbar-divider" />
 
-        <div className="toolbar-tabs">
-          {(['chat', 'effects', 'history'] as const).map(tab => (
-            <button
-              key={tab}
-              className={`toolbar-tab${activePanel === tab ? ' active' : ''}`}
-              onClick={() => setActivePanel(tab)}
-            >
-              {tab === 'chat' ? '对话' : tab === 'effects' ? '特效' : '历史'}
-            </button>
-          ))}
-        </div>
-
-        <div className="toolbar-divider" />
-
-        <button className="btn-sm" onClick={handleNewEffect} title="新建特效">+ 新建</button>
-        <button className="btn-sm" onClick={handleImportClick} title="导入 .prefab">导入</button>
-        <button className="btn-sm" onClick={() => {
-          if (currentEffect) {
-            syncEffectToSession();
-            const template = {
-              id: currentEffect.id, name: currentEffect.name,
-              description: `自定义模板 - ${currentEffect.name}`,
-              category: '自定义', tags: [],
-              effectConfig: JSON.parse(JSON.stringify(currentEffect))
-            };
-            const existing = JSON.parse(localStorage.getItem('cocos-custom-templates') || '[]');
-            existing.push(template);
-            localStorage.setItem('cocos-custom-templates', JSON.stringify(existing));
-            showToastMessage(`模板「${currentEffect.name}」已保存`);
-          }
-        }} title="保存为模板">保存</button>
-        <button className="btn-sm" onClick={() => setTemplateLibraryOpen(true)} title="模板库">
-          模板库
+        <button className="btn-sm" onClick={() => { newProject(); showToastMessage('已新建项目'); }} title="新建项目">新建</button>
+        <button className="btn-sm" onClick={handleOpenProject} title="打开项目">打开</button>
+        <button className="btn-sm" onClick={handleSave} disabled={!project} title="保存项目">
+          保存{isDirty ? '*' : ''}
         </button>
+        <button className="btn-sm" onClick={handleImportClick} title="导入 .prefab 到当前发射器">导入 Prefab</button>
+        <button className="btn-sm" onClick={() => setTemplateLibraryOpen(true)} title="模板库">模板库</button>
+
         <input
           ref={fileInputRef}
           type="file"
@@ -122,11 +121,31 @@ const App: React.FC = () => {
           style={{ display: 'none' }}
           onChange={handleFileChange}
         />
+
+        <div className="toolbar-divider" />
+
+        <div className="toolbar-tabs">
+          <button
+            className={`toolbar-tab${activePanel === 'hierarchy' ? ' active' : ''}`}
+            onClick={() => setActivePanel('hierarchy')}
+          >
+            层级
+          </button>
+          {aiPanelVisible && (
+            <button
+              className={`toolbar-tab${activePanel === 'ai' ? ' active' : ''}`}
+              onClick={() => setActivePanel('ai')}
+            >
+              AI 助手
+            </button>
+          )}
+        </div>
+
         <select
           className="select-sm"
           value={effectType}
           onChange={(e) => setEffectType(e.target.value as typeof effectType)}
-          style={{ width: 120 }}
+          style={{ width: 120, marginLeft: 8 }}
         >
           <option value="particle3d">3D 粒子</option>
           <option value="particle2d">2D 粒子</option>
@@ -143,17 +162,23 @@ const App: React.FC = () => {
 
         <div className="spacer" />
 
-        {activePanel === 'chat' && (
-          appMode === 'demo'
-            ? <span className="badge badge-demo">Demo</span>
-            : <span className="badge badge-llm">{aiSettings.model}</span>
-        )}
+        <button
+          className={`btn-sm${aiPanelVisible ? ' active' : ''}`}
+          onClick={() => {
+            setAiPanelVisible(!aiPanelVisible);
+            if (!aiPanelVisible) setActivePanel('ai');
+            else setActivePanel('hierarchy');
+          }}
+          title="显示/隐藏 AI 助手"
+        >
+          AI
+        </button>
 
         <button
           className="btn-sm"
           onClick={handleExport}
           disabled={!currentEffect || isStreaming}
-          title="导出"
+          title="导出到 Cocos"
         >
           导出
         </button>
@@ -180,9 +205,8 @@ const App: React.FC = () => {
         )}
 
         <div style={{ width: panelSizes.left, flexShrink: 0, borderRight: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column' }}>
-          {activePanel === 'chat' && <ChatPanel />}
-          {activePanel === 'effects' && <EffectTreePanel />}
-          {activePanel === 'history' && <VersionHistoryPanel />}
+          {activePanel === 'hierarchy' && <HierarchyPanel />}
+          {activePanel === 'ai' && aiPanelVisible && <ChatPanel />}
         </div>
 
         <ResizeHandle direction="horizontal" onResize={resizeLeft} />
@@ -209,14 +233,18 @@ const App: React.FC = () => {
       </div>
 
       <div className="statusbar">
-        <span>特效：{currentEffect?.name || '无'}</span>
+        <span>项目：{project?.name || '无'}{isDirty ? ' *' : ''}</span>
+        <span>|</span>
+        <span>发射器：{currentEffect?.name || '无'}</span>
         <span>|</span>
         <span>类型：{effectType === 'particle3d' ? '3D 粒子' : effectType}</span>
-        <span>|</span>
-        {appMode === 'demo' ? (
-          <span className="badge badge-demo">Demo 模式</span>
-        ) : (
-          <span className="badge badge-llm">LLM 模式</span>
+        {aiPanelVisible && activePanel === 'ai' && (
+          <>
+            <span>|</span>
+            {appMode === 'demo'
+              ? <span className="badge badge-demo">Demo</span>
+              : <span className="badge badge-llm">{aiSettings.model}</span>}
+          </>
         )}
         <span>|</span>
         <span className={`status-dot ${isStreaming ? 'generating' : 'ready'}`} />
@@ -225,7 +253,6 @@ const App: React.FC = () => {
 
       {settingsOpen && <SettingsModal />}
       {exportOpen && <ExportModal />}
-      <NewEffectModal open={newEffectModalOpen} onClose={() => setNewEffectModalOpen(false)} />
 
       {showToast && <div className="toast">{showToast}</div>}
     </>

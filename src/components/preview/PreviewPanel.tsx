@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useCallback } from 'react';
 import { useAppStore } from '@/stores/app-store';
-import { useSessionStore } from '@/stores/session-store';
+import { useProjectStore } from '@/stores/project-store';
 import { ParticlePreview } from '@/utils/particle-preview';
 import { Particle2DPreview } from '@/utils/particle2d-preview';
 import { AxisGizmo } from '@/components/preview/AxisGizmo';
@@ -33,7 +33,7 @@ export const PreviewPanel: React.FC = () => {
     effectType, previewPlaying, setPreviewPlaying,
     previewBackground, setPreviewBackground, showAxes, setShowAxes
   } = useAppStore();
-  const { currentEffect } = useSessionStore();
+  const { currentEffect } = useProjectStore();
   const config = currentEffect?.config as Particle3DConfig | undefined;
 
   const preview = previewRef.current;
@@ -113,8 +113,13 @@ export const PreviewPanel: React.FC = () => {
         <span style={{ fontSize: 12, color: 'var(--text-secondary)', flex: 1 }}>
           {effectType === 'particle2d' ? '2D 粒子预览' : '3D 粒子预览'}
         </span>
-        <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-secondary)' }}>
-          <input type="checkbox" checked={showAxes} onChange={(e) => setShowAxes(e.target.checked)} />
+        <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
+          <input
+            type="checkbox"
+            checked={showAxes}
+            onChange={(e) => setShowAxes(e.target.checked)}
+            onClick={(e) => e.stopPropagation()}
+          />
           坐标轴
         </label>
         <select
@@ -138,7 +143,7 @@ export const PreviewPanel: React.FC = () => {
         onMouseLeave={handleMouseUp}
         onWheel={handleWheel}
       >
-        {showAxes && <AxisGizmo key={effectType} preview={previewRef.current} />}
+        <AxisGizmo preview={previewRef.current} visible={showAxes} />
       </div>
     </div>
   );

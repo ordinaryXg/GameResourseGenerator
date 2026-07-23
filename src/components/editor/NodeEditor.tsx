@@ -4,7 +4,7 @@ import {
   useNodesState, useEdgesState, addEdge, Connection
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { useSessionStore } from '@/stores/session-store';
+import { useProjectStore } from '@/stores/project-store';
 import { useAppStore } from '@/stores/app-store';
 import { MODULE_DEFS } from '@/constants/modules';
 import { ModuleNode } from '@/components/editor/ModuleNode';
@@ -20,7 +20,12 @@ function getInitialNodes(
   return MODULE_DEFS.map((def, i) => {
     const col = i % 2;
     const row = Math.floor(i / 2);
-    const enabled = (config[def.key as keyof Particle3DConfig] as { enabled?: boolean })?.enabled !== false;
+    let enabled: boolean;
+    if (def.key === 'burstModule') {
+      enabled = config.mainModule.bursts.length > 0;
+    } else {
+      enabled = (config[def.key as keyof Particle3DConfig] as { enabled?: boolean })?.enabled !== false;
+    }
     const saved = layout?.[def.key];
     return {
       id: def.key,
@@ -43,7 +48,7 @@ function getInitialEdges(): Edge[] {
 }
 
 export const NodeEditor: React.FC = () => {
-  const { currentEffect, updateEffectConfig } = useSessionStore();
+  const { currentEffect, updateEffectConfig } = useProjectStore();
   const { selectedModuleKey, setSelectedModuleKey } = useAppStore();
   const config = currentEffect?.config as Particle3DConfig | undefined;
   const effectIdRef = useRef<string | null>(null);
@@ -69,14 +74,22 @@ export const NodeEditor: React.FC = () => {
   useEffect(() => {
     if (!config) return;
     setNodes(prev => prev.map(node => {
-      const enabled = (config[node.id as keyof Particle3DConfig] as { enabled?: boolean })?.enabled !== false;
+      let enabled: boolean;
+      if (node.id === 'burstModule') {
+        enabled = config.mainModule.bursts.length > 0;
+      } else {
+        enabled = (config[node.id as keyof Particle3DConfig] as { enabled?: boolean })?.enabled !== false;
+      }
       return {
         ...node,
+        draggable: interactive,
+        selectable: interactive,
+        connectable: interactive,
         selected: selectedModuleKey === node.id,
         data: { ...node.data, enabled }
       };
     }));
-  }, [config, selectedModuleKey, setNodes]);
+  }, [config, selectedModuleKey, interactive, setNodes]);
 
   const onConnect = useCallback((connection: Connection) => {
     setEdges((eds) => addEdge({
@@ -94,6 +107,19 @@ export const NodeEditor: React.FC = () => {
   const onNodeDoubleClick = useCallback((_event: React.MouseEvent, node: Node) => {
     const moduleKey = node.data.moduleKey as string;
     if (!moduleKey || !config) return;
+
+    if (moduleKey === 'burstModule') {
+      updateEffectConfig((prev) => {
+        const cfg = prev.config as Particle3DConfig;
+        const bursts = cfg.mainModule.bursts.length > 0 ? [] : [{ time: 0, count: 50 }];
+        return {
+          ...prev,
+          config: { ...cfg, mainModule: { ...cfg.mainModule, bursts } }
+        };
+      });
+      return;
+    }
+
     const module = (config as unknown as Record<string, { enabled?: boolean }>)[moduleKey];
     updateEffectConfig((prev) => {
       const cfg = { ...(prev.config as Particle3DConfig) };
@@ -140,19 +166,22 @@ export const NodeEditor: React.FC = () => {
         nodesDraggable={interactive}
         nodesConnectable={interactive}
         elementsSelectable={interactive}
+        panOnDrag={interactive ? [1, 2] : [0, 1, 2]}
+        selectionOnDrag={interactive}
         proOptions={{ hideAttribution: true }}
       >
         <Background color="rgba(48,54,61,0.6)" gap={24} size={1} />
         <Controls showInteractive={false} className="node-controls">
           <ControlButton
             onClick={() => setInteractive(v => !v)}
+            onMouseDown={(e) => e.stopPropagation()}
             title={interactive ? '锁定节点（禁止拖动）' : '解锁节点'}
             aria-label={interactive ? '锁定' : '解锁'}
           >
             {interactive ? (
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M17 8h-1V6a4 4 0 0 0-8 0v2H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2zm-3 0H10V6a2 2 0 1 1 4 0v2z"/></svg>
-            ) : (
               <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5zm3 8H9V7a3 3 0 0 1 6 0v3z"/></svg>
+            ) : (
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M17 8h-1V6a4 4 0 0 0-8 0v2H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2zm-3 0H10V6a2 2 0 1 1 4 0v2z"/></svg>
             )}
           </ControlButton>
         </Controls>

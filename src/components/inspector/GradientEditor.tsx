@@ -1,5 +1,6 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import type { GradientConfig, GradientKey } from '@/types/effect';
+import { sampleGradient } from '@/utils/gradient-utils';
 
 function rgbaToHex([r, g, b]: [number, number, number, number]): string {
   const toHex = (v: number) => Math.round(v * 255).toString(16).padStart(2, '0');
@@ -22,6 +23,16 @@ interface GradientEditorProps {
 export const GradientEditor: React.FC<GradientEditorProps> = ({ value, onChange }) => {
   const keys = value.keys.length > 0 ? value.keys : [{ time: 0, color: [1, 1, 1, 1] as [number, number, number, number] }];
 
+  const previewStyle = useMemo(() => {
+    const stops: string[] = [];
+    for (let i = 0; i <= 20; i++) {
+      const t = i / 20;
+      const [r, g, b, a] = sampleGradient({ keys }, t);
+      stops.push(`rgba(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)},${a.toFixed(3)}) ${t * 100}%`);
+    }
+    return { background: `linear-gradient(to right, ${stops.join(', ')})` };
+  }, [keys]);
+
   const updateKey = useCallback((index: number, patch: Partial<GradientKey>) => {
     const next = keys.map((k, i) => i === index ? { ...k, ...patch } : k);
     onChange({ keys: next });
@@ -38,6 +49,7 @@ export const GradientEditor: React.FC<GradientEditorProps> = ({ value, onChange 
 
   return (
     <div>
+      <div style={{ ...previewStyle, height: 14, borderRadius: 4, marginBottom: 8, border: '1px solid var(--border)' }} title="渐变预览" />
       {keys.map((key, i) => (
         <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
           <input

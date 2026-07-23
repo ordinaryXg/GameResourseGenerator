@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useAppStore } from '@/stores/app-store';
-import { useSessionStore } from '@/stores/session-store';
+import { useProjectStore } from '@/stores/project-store';
 import { ALL_TEMPLATES, type PresetTemplate } from '@/data/template-data';
 import type { EffectConfig } from '@/types/effect';
 import { generateUUID } from '@/utils/effect-defaults';
@@ -11,7 +11,7 @@ import { generateId } from '@/utils/effect-defaults';
 
 export const TemplateLibrary: React.FC = () => {
   const { setTemplateLibraryOpen } = useAppStore();
-  const { setCurrentEffect, addMessage } = useSessionStore();
+  const { setCurrentEffect, addMessage } = useProjectStore();
   const [activeCategory, setActiveCategory] = useState('全部');
 
   const filteredTemplates = useMemo(() => {

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useAppStore } from '@/stores/app-store';
-import { useSessionStore } from '@/stores/session-store';
+import { useProjectStore } from '@/stores/project-store';
 import { generateId } from '@/utils/effect-defaults';
 import { generateEffect, buildSystemPrompt } from '@/utils/ai-engine';
 import type { ChatMessage } from '@/types/effect';
@@ -14,8 +14,8 @@ export const ChatPanel: React.FC = () => {
   } = useAppStore();
 
   const {
-    messages, currentEffect, addMessage, setCurrentEffect, activeSessionId
-  } = useSessionStore();
+    messages, currentEffect, addMessage, setCurrentEffect, project
+  } = useProjectStore();
 
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -23,7 +23,7 @@ export const ChatPanel: React.FC = () => {
 
   // Welcome message
   useEffect(() => {
-    if (messages.length === 0 && activeSessionId) {
+    if (messages.length === 0 && project) {
       const welcomeMsg = appMode === 'demo'
         ? '👋 欢迎使用 **FX Studio 特效工坊**！\n\n当前为 **Demo 模式**，支持以下关键词：\n- 🔥 **火焰特效**\n- ❄️ **雪花飘落**\n- 🌧️ **下雨效果**\n- ✨ **魔法星光**\n- 💥 **爆炸效果**\n\n描述你想要的特效，或配置 API Key 切换到 AI 生成模式。'
         : '👋 欢迎使用 **FX Studio 特效工坊**！\n\n用自然语言描述你想要的特效，AI 将为你生成粒子效果。';
@@ -34,7 +34,7 @@ export const ChatPanel: React.FC = () => {
         timestamp: Date.now()
       });
     }
-  }, [activeSessionId]);
+  }, [project?.id]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -83,7 +83,6 @@ export const ChatPanel: React.FC = () => {
           setStreamingContent('');
           setIsStreaming(false);
           setCurrentEffect(result.effectConfig);
-          useSessionStore.getState().saveVersion();
         }
       }, 20);
     } else {

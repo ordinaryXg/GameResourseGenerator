@@ -7,7 +7,9 @@ export type EffectType = 'particle3d' | 'particle2d' | 'shader' | 'animation';
 
 export type ShapeType = 'box' | 'sphere' | 'hemisphere' | 'cone' | 'circle';
 export type EmitFrom = 'volume' | 'shell' | 'edge';
-export type RenderMode = 'billboard' | 'stretchedBillboard' | 'mesh';
+export type RenderMode = 'billboard' | 'stretchedBillboard' | 'horizontalBillboard' | 'verticalBillboard' | 'mesh';
+export type AlignmentSpace = 'view' | 'world' | 'local';
+
 
 export interface RangeValue {
   mode: 'constant' | 'randomBetween';
@@ -137,6 +139,12 @@ export interface TextureAnimationConfig {
 
 export interface RendererConfig {
   renderMode: RenderMode;
+  /** Stretched Billboard: stretch by speed */
+  velocityScale: number;
+  /** Stretched Billboard: stretch by particle size */
+  lengthScale: number;
+  /** Billboard alignment space */
+  alignSpace: AlignmentSpace;
 }
 
 export interface Particle3DConfig {

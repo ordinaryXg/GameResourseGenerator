@@ -6,17 +6,21 @@ const LABELS = { x: 'X', y: 'Y', z: 'Z' };
 
 interface AxisGizmoProps {
   preview: BaseParticlePreview;
+  visible: boolean;
 }
 
-export const AxisGizmo: React.FC<AxisGizmoProps> = ({ preview }) => {
+export const AxisGizmo: React.FC<AxisGizmoProps> = ({ preview, visible }) => {
   const [, frame] = useState(0);
 
   useEffect(() => {
+    if (!visible) return;
     let id = 0;
     const tick = () => { frame(f => f + 1); id = requestAnimationFrame(tick); };
     id = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(id);
-  }, [preview]);
+  }, [preview, visible]);
+
+  if (!visible) return null;
 
   const axes = preview.getAxisScreenVectors();
   const cx = 36;

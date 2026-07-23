@@ -1,82 +1,9 @@
-import type { EffectConfig, Particle3DConfig, RangeValue, Vector3Range, GradientConfig, CurveConfig, BurstConfig } from '@/types/effect';
+import type { EffectConfig, Particle3DConfig } from '@/types/effect';
 import { generateUUID } from './effect-defaults';
-
-// ============================================================
-// Cocos Creator 3.8 .prefab JSON → EffectConfig 解析��
-// ============================================================
-
-interface RawPrefabData {
-  __type__: string;
-  _name?: string;
-  _objFlags?: number;
-  _enabled?: boolean;
-  node?: { __id__: number };
-  _N$mainModule?: any;
-  _N$shapeModule?: any;
-  _N$colorOverLifetimeModule?: any;
-  _N$sizeOverLifetimeModule?: any;
-  _N$rotationOverLifetimeModule?: any;
-  _N$velocityOverLifetimeModule?: any;
-  _N$noiseModule?: any;
-  _N$trailModule?: any;
-  _N$textureAnimationModule?: any;
-  _N$renderer?: any;
-  [key: string]: any;
-}
-
-function parseRangeValue(raw: any): RangeValue {
-  if (!raw) return { mode: 'constant', constant: 0 };
-  if (raw.mode === 0 || raw.constant !== undefined) {
-    return { mode: 'constant', constant: raw.constant ?? 0 };
-  }
-  return { mode: 'randomBetween', min: raw.constantMin ?? 0, max: raw.constantMax ?? 1 };
-}
-
-function parseVector3Range(raw: any): Vector3Range {
-  return {
-    x: parseRangeValue(raw?.x),
-    y: parseRangeValue(raw?.y),
-    z: parseRangeValue(raw?.z)
-  };
-}
-
-function parseGradient(raw: any): GradientConfig {
-  if (!raw?.colorKeys) return { keys: [{ time: 0, color: [1, 1, 1, 1] }, { time: 1, color: [1, 1, 1, 0] }] };
-  return {
-    keys: raw.colorKeys.map((k: any) => ({
-      time: k.time ?? 0,
-      color: [
-        (k.color?.r ?? 255) / 255,
-        (k.color?.g ?? 255) / 255,
-        (k.color?.b ?? 255) / 255,
-        (k.color?.a ?? 255) / 255
-      ] as [number, number, number, number]
-    }))
-  };
-}
-
-function parseCurve(raw: any): CurveConfig {
-  if (!raw?.curve) return { keys: [{ time: 0, value: 0 }, { time: 1, value: 1 }], multiplier: 1 };
-  return {
-    keys: raw.curve.map((k: any) => ({
-      time: k.time ?? 0,
-      value: k.value ?? 0,
-      inTangent: k.inTangent,
-      outTangent: k.outTangent
-    })),
-    multiplier: raw.multiplier ?? 1
-  };
-}
-
-function parseBursts(raw: any[]): BurstConfig[] {
-  if (!raw) return [];
-  return raw.map((b: any) => ({
-    time: b.time ?? 0,
-    count: b.count ?? 0,
-    cycles: b.cycles ?? 1,
-    interval: b.interval ?? 0
-  }));
-}
+import {
+  parseCurveRange, parseGradientFromPrefab, parseCurve, parseBursts,
+  parseShapeType, parseEmitFrom, parseRenderMode, parseAlignSpace
+} from './cocos-serializers';
 
 export interface ImportResult {
   effectConfig: EffectConfig;
@@ -84,8 +11,74 @@ export interface ImportResult {
   warnings: string[];
 }
 
+interface RawPrefabData {
+  __type__: string;
+  _name?: string;
+  _N$mainModule?: Record<string, unknown>;
+  _N$shapeModule?: Record<string, unknown>;
+  _N$colorOverLifetimeModule?: Record<string, unknown>;
+  _N$sizeOverLifetimeModule?: Record<string, unknown>;
+  _N$rotationOverLifetimeModule?: Record<string, unknown>;
+  _N$velocityOverLifetimeModule?: Record<string, unknown>;
+  _N$noiseModule?: Record<string, unknown>;
+  _N$trailModule?: Record<string, unknown>;
+  _N$textureAnimationModule?: Record<string, unknown>;
+  _N$renderer?: Record<string, unknown>;
+  _shapeModule?: Record<string, unknown>;
+  _colorOverLifetimeModule?: Record<string, unknown>;
+  _sizeOvertimeModule?: Record<string, unknown>;
+  _rotationOvertimeModule?: Record<string, unknown>;
+  _velocityOvertimeModule?: Record<string, unknown>;
+  _noiseModule?: Record<string, unknown>;
+  _trailModule?: Record<string, unknown>;
+  _textureAnimationModule?: Record<string, unknown>;
+  renderer?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+function readMainModule(ps: RawPrefabData): Record<string, unknown> {
+  if (ps._N$mainModule) return ps._N$mainModule;
+  return ps as Record<string, unknown>;
+}
+
+function readShape(ps: RawPrefabData) {
+  return ps._shapeModule ?? ps._N$shapeModule;
+}
+
+function readColorOL(ps: RawPrefabData) {
+  return ps._colorOverLifetimeModule ?? ps._N$colorOverLifetimeModule;
+}
+
+function readSizeOL(ps: RawPrefabData) {
+  return ps._sizeOvertimeModule ?? ps._N$sizeOverLifetimeModule;
+}
+
+function readRotationOL(ps: RawPrefabData) {
+  return ps._rotationOvertimeModule ?? ps._N$rotationOverLifetimeModule;
+}
+
+function readVelocityOL(ps: RawPrefabData) {
+  return ps._velocityOvertimeModule ?? ps._N$velocityOverLifetimeModule;
+}
+
+function readNoise(ps: RawPrefabData) {
+  return ps._noiseModule ?? ps._N$noiseModule;
+}
+
+function readTrail(ps: RawPrefabData) {
+  return ps._trailModule ?? ps._N$trailModule;
+}
+
+function readTexAnim(ps: RawPrefabData) {
+  return ps._textureAnimationModule ?? ps._N$textureAnimationModule;
+}
+
+function readRenderer(ps: RawPrefabData) {
+  return ps.renderer ?? ps._N$renderer;
+}
+
 export function parsePrefab(jsonString: string): ImportResult {
-  let prefabArray: any[];
+  let prefabArray: unknown[];
   try {
     prefabArray = JSON.parse(jsonString);
   } catch {
@@ -96,97 +89,106 @@ export function parsePrefab(jsonString: string): ImportResult {
     throw new Error('无效的 .prefab 文件格式');
   }
 
-  // Find cc.ParticleSystem component
   let psData: RawPrefabData | null = null;
-  let nodeData: any = null;
-  const warnings: string[] = [];
+  let nodeData: { _name?: string } | null = null;
 
   for (const item of prefabArray) {
-    if (item?.__type__ === 'cc.ParticleSystem') {
-      psData = item;
-    }
-    if (item?.__type__ === 'cc.Node') {
-      nodeData = item;
-    }
+    if ((item as RawPrefabData)?.__type__ === 'cc.ParticleSystem') psData = item as RawPrefabData;
+    if ((item as RawPrefabData)?.__type__ === 'cc.Node') nodeData = item as { _name?: string };
   }
 
-  if (!psData) {
-    throw new Error('该预制体不包含粒子系统组件（cc.ParticleSystem）');
-  }
+  if (!psData) throw new Error('该预制体不包含粒子系统组件（cc.ParticleSystem）');
 
   const name = nodeData?._name || psData._name || '导入特效';
-  const main = psData._N$mainModule || {};
-
-  // Module list for future unsupported module detection
-  // const _knownModules = ['noiseModule', 'trailModule', 'textureAnimationModule'];
+  const main = readMainModule(psData);
+  const shape = readShape(psData);
+  const colorOL = readColorOL(psData);
+  const sizeOL = readSizeOL(psData);
+  const rotationOL = readRotationOL(psData);
+  const velocityOL = readVelocityOL(psData);
+  const noise = readNoise(psData);
+  const trail = readTrail(psData);
+  const texAnim = readTexAnim(psData);
+  const renderer = readRenderer(psData);
 
   const config: Particle3DConfig = {
     mainModule: {
-      duration: main.duration ?? 5,
-      capacity: main.capacity ?? 100,
-      loop: main.loop ?? true,
-      playOnAwake: main.playOnAwake ?? true,
-      simulationSpeed: main.simulationSpeed ?? 1,
-      startDelay: main.startDelay ?? 0,
-      startLifetime: parseRangeValue(main.startLifetime),
-      startSpeed: parseRangeValue(main.startSpeed),
-      startSize3D: parseVector3Range(main.startSize3D),
-      startRotation3D: parseVector3Range(main.startRotation3D),
-      startColor: parseGradient(main.startColor),
-      gravityModifier: main.gravityModifier ?? 0,
-      rateOverTime: main.rateOverTime ?? 0,
-      rateOverDistance: main.rateOverDistance ?? 0,
+      duration: (main.duration as number) ?? 5,
+      capacity: (main._capacity ?? main.capacity ?? 100) as number,
+      loop: (main.loop as boolean) ?? true,
+      playOnAwake: (main.playOnAwake as boolean) ?? true,
+      simulationSpeed: (main.simulationSpeed as number) ?? 1,
+      startDelay: parseCurveRange(main.startDelay).constant ?? 0,
+      startLifetime: parseCurveRange(main.startLifetime),
+      startSpeed: parseCurveRange(main.startSpeed),
+      startSize3D: {
+        x: parseCurveRange((main.startSize3D as { x?: unknown })?.x ?? main.startSizeX),
+        y: parseCurveRange((main.startSize3D as { y?: unknown })?.y ?? main.startSizeY),
+        z: parseCurveRange((main.startSize3D as { z?: unknown })?.z ?? main.startSizeZ)
+      },
+      startRotation3D: {
+        x: parseCurveRange(main.startRotationX),
+        y: parseCurveRange(main.startRotationY),
+        z: parseCurveRange(main.startRotationZ)
+      },
+      startColor: parseGradientFromPrefab(prefabArray, main.startColor),
+      gravityModifier: parseCurveRange(main.gravityModifier).constant ?? 0,
+      rateOverTime: parseCurveRange(main.rateOverTime).constant ?? 0,
+      rateOverDistance: parseCurveRange(main.rateOverDistance).constant ?? 0,
       bursts: parseBursts(main.bursts)
     },
     shapeModule: {
-      enabled: psData._N$shapeModule?.enable ?? true,
-      shapeType: psData._N$shapeModule?.shapeType ?? 'cone',
-      radius: psData._N$shapeModule?.radius ?? 1,
-      angle: psData._N$shapeModule?.angle ?? 25,
-      arc: psData._N$shapeModule?.arc ?? 360,
-      emitFrom: psData._N$shapeModule?.emitFrom ?? 'volume'
+      enabled: (shape?._enable ?? shape?.enable ?? true) as boolean,
+      shapeType: parseShapeType(shape?._shapeType ?? shape?.shapeType),
+      radius: (shape?.radius as number) ?? 1,
+      angle: shape?._angle != null ? (shape._angle as number) * (180 / Math.PI) : (shape?.angle as number) ?? 25,
+      arc: shape?._arc != null ? (shape._arc as number) * (180 / Math.PI) : (shape?.arc as number) ?? 360,
+      emitFrom: parseEmitFrom(shape?.emitFrom)
     },
     colorOverLifetime: {
-      enabled: psData._N$colorOverLifetimeModule?.enable ?? false,
-      color: parseGradient(psData._N$colorOverLifetimeModule?.color)
+      enabled: (colorOL?._enable ?? colorOL?.enable ?? false) as boolean,
+      color: parseGradientFromPrefab(prefabArray, colorOL?.color)
     },
     sizeOverLifetime: {
-      enabled: psData._N$sizeOverLifetimeModule?.enable ?? false,
-      size: parseCurve(psData._N$sizeOverLifetimeModule?.size)
+      enabled: (sizeOL?._enable ?? sizeOL?.enable ?? false) as boolean,
+      size: parseCurve(sizeOL?.size)
     },
     rotationOverLifetime: {
-      enabled: psData._N$rotationOverLifetimeModule?.enable ?? false,
-      rotation: parseCurve(psData._N$rotationOverLifetimeModule?.rotation)
+      enabled: (rotationOL?._enable ?? rotationOL?.enable ?? false) as boolean,
+      rotation: parseCurve(rotationOL?.z ?? rotationOL?.rotation)
     },
     velocityOverLifetime: {
-      enabled: psData._N$velocityOverLifetimeModule?.enable ?? false,
-      velocityX: parseCurve(psData._N$velocityOverLifetimeModule?.x),
-      velocityY: parseCurve(psData._N$velocityOverLifetimeModule?.y),
-      velocityZ: parseCurve(psData._N$velocityOverLifetimeModule?.z)
+      enabled: (velocityOL?._enable ?? velocityOL?.enable ?? false) as boolean,
+      velocityX: parseCurve(velocityOL?.x ?? velocityOL?.velocityX),
+      velocityY: parseCurve(velocityOL?.y ?? velocityOL?.velocityY),
+      velocityZ: parseCurve(velocityOL?.z ?? velocityOL?.velocityZ)
     },
     noiseModule: {
-      enabled: psData._N$noiseModule?.enable ?? false,
-      strength: psData._N$noiseModule?.strength ?? 10,
-      frequency: psData._N$noiseModule?.frequency ?? 1,
-      scrollSpeed: psData._N$noiseModule?.scrollSpeed ?? 1,
-      octaves: psData._N$noiseModule?.octaves ?? 1
+      enabled: (noise?._enable ?? noise?.enable ?? false) as boolean,
+      strength: parseCurveRange(noise?.strength).constant ?? 10,
+      frequency: (noise?.frequency as number) ?? 1,
+      scrollSpeed: (noise?.scrollSpeed as number) ?? 1,
+      octaves: (noise?.octaves as number) ?? 1
     },
     trailModule: {
-      enabled: psData._N$trailModule?.enable ?? false,
-      mode: psData._N$trailModule?.mode ?? 0,
-      ratio: psData._N$trailModule?.ratio ?? 1,
-      lifetime: parseRangeValue(psData._N$trailModule?.lifetime),
-      colorOverTrail: parseGradient(psData._N$trailModule?.colorOverTrail)
+      enabled: (trail?._enable ?? trail?.enable ?? false) as boolean,
+      mode: (trail?.mode as number) ?? 0,
+      ratio: parseCurveRange(trail?.ratio).constant ?? 1,
+      lifetime: parseCurveRange(trail?.lifetime),
+      colorOverTrail: parseGradientFromPrefab(prefabArray, trail?.colorOverTrail)
     },
     textureAnimation: {
-      enabled: psData._N$textureAnimationModule?.enable ?? false,
-      numTilesX: psData._N$textureAnimationModule?.numTilesX ?? 1,
-      numTilesY: psData._N$textureAnimationModule?.numTilesY ?? 1,
-      animation: psData._N$textureAnimationModule?.animation ?? 0,
-      frameOverTime: parseCurve(psData._N$textureAnimationModule?.frameOverTime)
+      enabled: (texAnim?._enable ?? texAnim?.enable ?? false) as boolean,
+      numTilesX: (texAnim?.numTilesX as number) ?? 1,
+      numTilesY: (texAnim?.numTilesY as number) ?? 1,
+      animation: (texAnim?.animation as number) ?? 0,
+      frameOverTime: parseCurve(texAnim?.frameOverTime)
     },
     rendererModule: {
-      renderMode: psData._N$renderer?.renderMode ?? 'billboard'
+      renderMode: parseRenderMode(renderer?._renderMode ?? renderer?.renderMode),
+      velocityScale: (renderer?._velocityScale as number) ?? 1,
+      lengthScale: (renderer?._lengthScale as number) ?? 1,
+      alignSpace: parseAlignSpace(renderer?._alignSpace)
     }
   };
 
@@ -206,5 +208,5 @@ export function parsePrefab(jsonString: string): ImportResult {
     config
   };
 
-  return { effectConfig, unsupportedModules: [], warnings };
+  return { effectConfig, unsupportedModules: [], warnings: [] };
 }

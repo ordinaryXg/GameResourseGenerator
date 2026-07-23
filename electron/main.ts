@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog, nativeImage } from 'electron';
 import { join } from 'path';
 import { existsSync } from 'fs';
-import { writeFile, mkdir, access } from 'fs/promises';
+import { writeFile, mkdir, access, readFile } from 'fs/promises';
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 
@@ -73,6 +73,27 @@ ipcMain.handle('dialog:openDirectory', async () => {
   return result.canceled ? null : result.filePaths[0];
 });
 
+ipcMain.handle('dialog:openProjectFile', async () => {
+  const result = await dialog.showOpenDialog(mainWindow!, {
+    properties: ['openFile'],
+    filters: [{ name: 'FX Studio Project', extensions: ['fxproj'] }]
+  });
+  return result.canceled ? null : result.filePaths[0];
+});
+
+ipcMain.handle('dialog:saveProjectFile', async (_event, defaultName?: string) => {
+  const safe = (defaultName || 'project').replace(/[<>:"/\\|?*]/g, '_');
+  const result = await dialog.showSaveDialog(mainWindow!, {
+    filters: [{ name: 'FX Studio Project', extensions: ['fxproj'] }],
+    defaultPath: `${safe}.fxproj`
+  });
+  return result.canceled ? null : result.filePath;
+});
+
+ipcMain.handle('fs:readFile', async (_event, filePath: string) => {
+  return readFile(filePath, 'utf-8');
+});
+
 ipcMain.handle('fs:writeFile', async (_event, filePath: string, content: string) => {
   await writeFile(filePath, content, 'utf-8');
   return true;
@@ -92,16 +113,20 @@ ipcMain.handle('fs:exists', async (_event, filePath: string) => {
   }
 });
 
-ipcMain.handle('export:writeFiles', async (_event, files: { path: string; content: string }[]) => {
+ipcMain.handle('export:writeFiles', async (_event, files: { path: string; content: string; encoding?: 'utf8' | 'base64' }[]) => {
   const results: { path: string; success: boolean; error?: string }[] = [];
   for (const file of files) {
     try {
-      const dir = file.path.substring(0, file.path.lastIndexOf('/'));
+      const dir = file.path.substring(0, Math.max(file.path.lastIndexOf('/'), file.path.lastIndexOf('\\')));
       await mkdir(dir, { recursive: true });
-      await writeFile(file.path, file.content, 'utf-8');
+      const payload = file.encoding === 'base64'
+        ? Buffer.from(file.content, 'base64')
+        : file.content;
+      await writeFile(file.path, payload);
       results.push({ path: file.path, success: true });
-    } catch (err: any) {
-      results.push({ path: file.path, success: false, error: err.message });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      results.push({ path: file.path, success: false, error: msg });
     }
   }
   return results;

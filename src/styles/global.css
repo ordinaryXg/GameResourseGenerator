@@ -288,6 +288,29 @@ button.danger {
   padding: 0 8px;
 }
 
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.btn-primary:hover {
+  filter: brightness(1.08);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tree-row.selected {
+  background: rgba(88, 166, 255, 0.12);
+}
+
 /* Panel headers & tabs */
 .panel-header {
   display: flex;
@@ -376,13 +399,28 @@ button.danger {
   padding: 6px 10px;
   font-size: 12px;
   color: var(--text-primary);
+  outline: none;
 }
 
 .context-menu-item:hover:not(:disabled) {
   background: var(--bg-tertiary);
 }
 
+.context-menu-item:focus {
+  outline: none;
+}
+
+.context-menu-item:focus-visible {
+  background: var(--bg-tertiary);
+}
+
 .context-menu-item.danger {
+  color: var(--error);
+}
+
+.context-menu-item.danger:hover:not(:disabled),
+.context-menu-item.danger:focus-visible {
+  background: rgba(248, 81, 73, 0.12);
   color: var(--error);
 }
 
@@ -405,6 +443,15 @@ button.danger {
   width: 100% !important;
   height: 100% !important;
   display: block;
+}
+
+.axis-gizmo {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0.95;
 }
 
 /* Node editor */

@@ -1,5 +1,6 @@
 export const MODULE_DEFS = [
   { key: 'mainModule', label: '主模块', color: '#58a6ff' },
+  { key: 'burstModule', label: '爆发喷射', color: '#f97316' },
   { key: 'shapeModule', label: '发射器形状', color: '#7c3aed' },
   { key: 'colorOverLifetime', label: '颜色', color: '#f85149' },
   { key: 'sizeOverLifetime', label: '大小', color: '#3fb950' },

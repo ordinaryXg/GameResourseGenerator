@@ -50,10 +50,7 @@ export function getDefaultParticle3DConfig(): Particle3DConfig {
       startSpeed: defaultRange(5),
       startSize3D: defaultVector3(1, 1, 1),
       startRotation3D: defaultVector3(0, 0, 0),
-      startColor: defaultGradient(
-        [0, [1, 0.5, 0.1, 1]],
-        [1, [1, 0.1, 0.02, 0]]
-      ),
+      startColor: defaultGradient([0, [1, 1, 1, 1]]),
       gravityModifier: -0.5,
       rateOverTime: 20,
       rateOverDistance: 0,
@@ -110,7 +107,10 @@ export function getDefaultParticle3DConfig(): Particle3DConfig {
       frameOverTime: defaultCurve([0, 0], [1, 1])
     },
     rendererModule: {
-      renderMode: 'billboard'
+      renderMode: 'billboard',
+      velocityScale: 1,
+      lengthScale: 1,
+      alignSpace: 'view'
     }
   };
 }

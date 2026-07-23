@@ -3,6 +3,9 @@ import { contextBridge, ipcRenderer } from 'electron';
 contextBridge.exposeInMainWorld('electronAPI', {
   // Dialog
   openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),
+  openProjectFile: () => ipcRenderer.invoke('dialog:openProjectFile'),
+  saveProjectFile: (defaultName?: string) => ipcRenderer.invoke('dialog:saveProjectFile', defaultName),
+  readFile: (path: string) => ipcRenderer.invoke('fs:readFile', path),
 
   // File System
   writeFile: (path: string, content: string) => ipcRenderer.invoke('fs:writeFile', path, content),
@@ -10,7 +13,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   exists: (path: string) => ipcRenderer.invoke('fs:exists', path),
 
   // Export
-  writeExportFiles: (files: { path: string; content: string }[]) =>
+  writeExportFiles: (files: { path: string; content: string; encoding?: 'utf8' | 'base64' }[]) =>
     ipcRenderer.invoke('export:writeFiles', files),
 
   // AI

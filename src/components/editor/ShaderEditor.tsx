@@ -8,8 +8,9 @@ import { oneDark } from '@codemirror/theme-one-dark';
 import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import { highlightSelectionMatches, searchKeymap } from '@codemirror/search';
 import { lintKeymap } from '@codemirror/lint';
-import { useSessionStore } from '@/stores/session-store';
+import { useProjectStore } from '@/stores/project-store';
 import { generateId } from '@/utils/effect-defaults';
+import { extractFragmentProgram, preprocessForWebGL, compileFragmentShader } from '@/utils/shader-preprocessor';
 
 const DEFAULT_SHADER = `// Cocos Creator 3.8 Shader
 // 在左侧对话面板描述效果，或直接编辑 GLSL 代码
@@ -110,7 +111,7 @@ export const ShaderEditor: React.FC = () => {
   const viewRef = useRef<EditorView | null>(null);
   const [code, setCode] = useState(DEFAULT_SHADER);
   const [compileError, setCompileError] = useState<string | null>(null);
-  const { addMessage } = useSessionStore();
+  const { addMessage } = useProjectStore();
 
   useEffect(() => {
     if (!editorRef.current) return;
@@ -165,29 +166,24 @@ export const ShaderEditor: React.FC = () => {
       return;
     }
 
-    // Extract GLSL fragment shader code for WebGL compilation
-    const glslMatch = currentCode.match(/CCProgram\s+\S+\s*%\{([\s\S]*?)\}%/);
-    if (glslMatch) {
-      const glsl = glslMatch[1];
+    // Extract fragment shader and preprocess Cocos-specific syntax for WebGL validation
+    const extracted = extractFragmentProgram(currentCode);
+    if (extracted) {
       try {
-        const canvas = document.createElement('canvas');
-        const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
-        if (gl) {
-          const shader = gl.createShader(gl.FRAGMENT_SHADER)!;
-          gl.shaderSource(shader, `#version 300 es\nprecision highp float;\n${glsl}`);
-          gl.compileShader(shader);
-          if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-            const log = gl.getShaderInfoLog(shader) || '未知编译错误';
-            setCompileError(log.substring(0, 200));
-            gl.deleteShader(shader);
-            return;
-          }
-          gl.deleteShader(shader);
+        const glsl = preprocessForWebGL(extracted.glsl);
+        const error = compileFragmentShader(glsl);
+        if (error) {
+          setCompileError(error.substring(0, 300));
+          return;
         }
-      } catch (e: any) {
-        setCompileError(`WebGL 编译环境不可用: ${e.message}`);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : '预处理失败';
+        setCompileError(msg);
         return;
       }
+    } else {
+      setCompileError('未找到 CCProgram 片段着色器块');
+      return;
     }
 
     addMessage({
