@@ -11,6 +11,9 @@ export interface EmitterPreviewSource {
   enabled: boolean;
   mainTextureAssetId?: string;
   materialAssetId?: string;
+  meshAssetId?: string;
+  /** Emitter node local transform (without parent chain). */
+  localTransform?: Transform3D;
 }
 
 export function collectEmitterPreviewSources(
@@ -34,7 +37,9 @@ export function collectEmitterPreviewSources(
           transform: world,
           enabled: node.enabled,
           mainTextureAssetId: node.assetRefs.mainTexture,
-          materialAssetId: node.assetRefs.material
+          materialAssetId: node.assetRefs.material,
+          meshAssetId: node.assetRefs.mesh,
+          localTransform: node.transform
         });
       } else if (isGroupNode(node)) {
         if (!node.enabled && !includeDisabled) continue;

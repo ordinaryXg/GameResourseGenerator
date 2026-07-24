@@ -86,6 +86,25 @@ export class ImportAssetCollector {
     return entry.id;
   }
 
+  resolveMeshRef(meshUuid: string | undefined): string | undefined {
+    if (!meshUuid) return undefined;
+
+    const existing = this.findImportedByCocosUuid(meshUuid);
+    if (existing) return existing.id;
+
+    const baseUuid = meshUuid.includes('@') ? meshUuid.split('@')[0]! : meshUuid;
+    const entry: AssetEntry = {
+      id: `imported-mesh-${shortUuid(meshUuid)}`,
+      name: `imported-mesh-${shortUuid(meshUuid)}`,
+      type: 'mesh',
+      source: 'imported',
+      uri: `cocos://imported/meshes/${meshUuid}.fbx`,
+      meta: { uuid: meshUuid }
+    };
+    this.register(entry, meshUuid, baseUuid);
+    return entry.id;
+  }
+
   private register(entry: AssetEntry, ...uuids: string[]) {
     this.imported.push(entry);
     for (const uuid of uuids) {
@@ -97,21 +116,24 @@ export class ImportAssetCollector {
 export function extractParticleAssetUuids(
   pool: unknown[],
   ps: Record<string, unknown>
-): { materialUuid?: string; spriteFrameUuid?: string } {
+): { materialUuid?: string; spriteFrameUuid?: string; meshUuid?: string } {
   const materials = ps._materials as Array<{ __uuid__?: string }> | undefined;
   const materialUuid = materials?.[0]?.__uuid__;
 
   let spriteFrameUuid: string | undefined;
+  let meshUuid: string | undefined;
 
   const rendererRef = ps.renderer ?? ps._N$renderer;
   if (rendererRef) {
     const renderer = pool[(rendererRef as { __id__?: number }).__id__ ?? -1] as Record<string, unknown> | undefined;
     const mainTexture = renderer?._mainTexture as { __uuid__?: string } | undefined;
     spriteFrameUuid = mainTexture?.__uuid__;
+    const mesh = renderer?._mesh as { __uuid__?: string } | undefined;
+    meshUuid = mesh?.__uuid__;
   }
 
   // Cocos 3.x：ParticleSystemRenderer 也可能挂在同一节点组件列表
-  if (!spriteFrameUuid) {
+  if (!spriteFrameUuid || !meshUuid) {
     const nodeRef = ps.node as { __id__?: number } | undefined;
     const node = nodeRef ? pool[nodeRef.__id__ ?? -1] as Record<string, unknown> | undefined : undefined;
     const components = node?._components as Array<{ __id__?: number }> | undefined;
@@ -119,13 +141,19 @@ export function extractParticleAssetUuids(
       for (const compRef of components) {
         const comp = pool[(compRef as { __id__?: number }).__id__ ?? -1] as Record<string, unknown> | undefined;
         if (comp?.__type__ === 'cc.ParticleSystemRenderer') {
-          const mainTexture = comp._mainTexture as { __uuid__?: string } | undefined;
-          spriteFrameUuid = mainTexture?.__uuid__;
-          break;
+          if (!spriteFrameUuid) {
+            const mainTexture = comp._mainTexture as { __uuid__?: string } | undefined;
+            spriteFrameUuid = mainTexture?.__uuid__;
+          }
+          if (!meshUuid) {
+            const mesh = comp._mesh as { __uuid__?: string } | undefined;
+            meshUuid = mesh?.__uuid__;
+          }
+          if (spriteFrameUuid && meshUuid) break;
         }
       }
     }
   }
 
-  return { materialUuid, spriteFrameUuid };
+  return { materialUuid, spriteFrameUuid, meshUuid };
 }

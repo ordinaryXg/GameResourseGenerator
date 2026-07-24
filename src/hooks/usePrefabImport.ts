@@ -78,7 +78,7 @@ export function usePrefabImport() {
       const bound = bindPrefabImportAssets(parsed.project, files);
       const warnings = [...parsed.warnings, ...bound.warnings];
       if (bound.boundAssetCount > 0) {
-        warnings.push(`已绑定 ${bound.boundAssetCount} 个磁盘资产（贴图/材质）`);
+        warnings.push(`已绑定 ${bound.boundAssetCount} 个磁盘资产（贴图/材质/模型）`);
       }
       const mode = useProjectStore.getState().project ? 'merge' : 'new';
       finishImport(bound.project, warnings, assetRootDir, mode);

@@ -72,3 +72,33 @@ export function findAssetById(assets: AssetEntry[], id: string | undefined): Ass
   if (!id) return null;
   return assets.find(a => a.id === id) ?? null;
 }
+
+/** Lowercase UUID keys including sprite-frame `@subId` base form. */
+export function cocosUuidLookupKeys(uuid: string | undefined): string[] {
+  if (!uuid) return [];
+  const keys = new Set<string>();
+  keys.add(uuid.trim().toLowerCase());
+  if (uuid.includes('@')) {
+    keys.add(uuid.split('@')[0]!.trim().toLowerCase());
+  }
+  return [...keys];
+}
+
+export function findTextureAssetByCocosUuid(
+  assets: Iterable<AssetEntry>,
+  uuid: string | undefined
+): AssetEntry | null {
+  const keys = new Set(cocosUuidLookupKeys(uuid));
+  if (keys.size === 0) return null;
+
+  for (const asset of assets) {
+    if (asset.type !== 'texture' && asset.type !== 'spriteFrame') continue;
+    const candidates = [asset.meta?.uuid, asset.meta?.spriteFrameUuid];
+    for (const candidate of candidates) {
+      for (const key of cocosUuidLookupKeys(candidate)) {
+        if (keys.has(key)) return asset;
+      }
+    }
+  }
+  return null;
+}

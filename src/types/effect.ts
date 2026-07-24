@@ -65,12 +65,20 @@ export interface EffectMetadata {
 // 3D 粒子配置
 // ============================================================
 
+export type SimulationSpace = 'world' | 'local';
+
 export interface MainModuleConfig {
   duration: number;
   capacity: number;
   loop: boolean;
   playOnAwake: boolean;
   simulationSpeed: number;
+  /** Cocos `_simulationSpace`: 0 world, 1 local */
+  simulationSpace: SimulationSpace;
+  /** Cocos `scaleSpace`: 0 world, 1 local — affects startSize scaling with emitter */
+  scaleSpace?: 'world' | 'local';
+  /** Cocos `startSize3D` toggle — when false, size resolves to (X, X, 1) */
+  useStartSize3D?: boolean;
   startDelay: number;
   startLifetime: RangeValue;
   startSpeed: RangeValue;
@@ -117,7 +125,12 @@ export interface SizeOverLifetimeConfig {
 
 export interface RotationOverLifetimeConfig {
   enabled: boolean;
+  /** Cocos `_separateAxes` — per-axis angular velocity (rad/s) */
+  separateAxes?: boolean;
   rotation: CurveConfig;
+  angularVelocityX?: RangeValue;
+  angularVelocityY?: RangeValue;
+  angularVelocityZ?: RangeValue;
 }
 
 export interface VelocityOverLifetimeConfig {

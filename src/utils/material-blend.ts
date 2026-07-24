@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { AssetEntry } from '@/types/asset';
 import type { RenderMode } from '@/types/effect';
 import type { ParticleBlendMode } from '@/types/material';
+import { findTextureAssetByCocosUuid } from '@/utils/asset-resolver';
 import { getParticleMaterialConfig } from '@/utils/particle-material';
 
 export type { ParticleBlendMode };
@@ -45,12 +46,19 @@ export function resolveMaterialTintRgba(
 export function resolvePreviewTextureAssetId(
   emitterTextureId: string | undefined,
   materialAssetId: string | undefined,
-  getAsset: (id: string) => AssetEntry | null
+  getAsset: (id: string) => AssetEntry | null,
+  allAssets?: Iterable<AssetEntry>
 ): string | undefined {
   if (materialAssetId) {
     const asset = getAsset(materialAssetId);
-    const matTex = asset ? getParticleMaterialConfig(asset).mainTextureAssetId : undefined;
-    if (matTex) return matTex;
+    if (asset) {
+      const matConfig = getParticleMaterialConfig(asset);
+      if (matConfig.mainTextureAssetId) return matConfig.mainTextureAssetId;
+      if (matConfig.mainTextureUuid && allAssets) {
+        const linked = findTextureAssetByCocosUuid(allAssets, matConfig.mainTextureUuid);
+        if (linked) return linked.id;
+      }
+    }
   }
   return emitterTextureId;
 }

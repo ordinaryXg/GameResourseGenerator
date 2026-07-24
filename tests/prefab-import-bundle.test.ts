@@ -55,6 +55,71 @@ describe('prefab-import-bundle', () => {
 
     const tex = bound.project.assetRegistry.find(a => a.meta?.uuid === texBase);
     expect(tex?.uri.startsWith('data:image')).toBe(true);
+
+    const mat = bound.project.assetRegistry.find(a => a.meta?.uuid === matUuid);
+    expect(mat?.meta?.mainTextureAssetId).toBe(tex?.id);
+  });
+
+  it('links material mainTextureAssetId from .mtl props UUID', () => {
+    const ringTexUuid = '19c42cb0-b15e-4fb4-8da1-ae7772ecf732';
+    const ringMatUuid = '376faabc-8b8c-4b07-863f-a1923d8757cf';
+    const files = [
+      {
+        name: 'ring.png',
+        relativePath: 'WhirlRes/ring.png',
+        content: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+        encoding: 'base64' as const
+      },
+      {
+        name: 'ring.png.meta',
+        relativePath: 'WhirlRes/ring.png.meta',
+        content: buildSampleTextureMeta(ringTexUuid)
+      },
+      {
+        name: 'ring_material.mtl',
+        relativePath: 'WhirlRes/ring_material.mtl',
+        content: JSON.stringify({
+          __type__: 'cc.Material',
+          _effectAsset: { __uuid__: 'd1346436-ac96-4271-b863-1f4fdead95b0' },
+          _techIdx: 1,
+          _defines: [{}, {}],
+          _states: [{ blendState: { targets: [{}] } }, { blendState: { targets: [{}] } }],
+          _props: [{
+            mainTexture: { __uuid__: `${ringTexUuid}@6c48a` }
+          }, {}]
+        })
+      },
+      {
+        name: 'ring_material.mtl.meta',
+        relativePath: 'WhirlRes/ring_material.mtl.meta',
+        content: JSON.stringify({ ver: '1.0.21', uuid: ringMatUuid, files: ['.json'] })
+      }
+    ];
+
+    const project = createExplosionProject();
+    project.assetRegistry.push({
+      id: 'imported-mat-test',
+      name: 'ring_material',
+      type: 'material',
+      source: 'imported',
+      uri: 'cocos://imported/materials/ring.mtl',
+      meta: { uuid: ringMatUuid, blend: 'additive' }
+    });
+    project.assetRegistry.push({
+      id: 'imported-tex-test',
+      name: 'ring',
+      type: 'texture',
+      source: 'imported',
+      uri: 'cocos://imported/textures/ring.png',
+      meta: { uuid: ringTexUuid, spriteFrameUuid: `${ringTexUuid}@6c48a` }
+    });
+
+    const bound = bindPrefabImportAssets(project, files);
+    const mat = bound.project.assetRegistry.find(a => a.meta?.uuid === ringMatUuid);
+    const tex = bound.project.assetRegistry.find(a => a.meta?.uuid === ringTexUuid);
+    expect(tex?.uri.startsWith('data:image')).toBe(true);
+    expect(mat?.meta?.mainTextureAssetId).toBe(tex?.id);
+    expect(mat?.meta?.mainTextureUuid).toBe(`${ringTexUuid}@6c48a`);
   });
 
   it('computes relative path from prefab dir to nested files', () => {

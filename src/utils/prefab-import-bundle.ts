@@ -1,8 +1,11 @@
 import type { AssetEntry } from '@/types/asset';
 import type { EffectProject } from '@/types/project';
+import { parseCocosAnimationClip } from '@/utils/cocos-animation-import';
+import { bindAnimationClipToTree } from '@/utils/preview-transform-tree';
 import { buildDefaultTextureExport } from '@/utils/default-particle-texture';
 import { parseMtlContent } from '@/utils/mtl-io';
-import { getMaterialDocument, syncCompatMirrors } from '@/utils/material-document';
+import { getMaterialDocument, particleConfigFromDocument, syncCompatMirrors } from '@/utils/material-document';
+import { findTextureAssetByCocosUuid } from '@/utils/asset-resolver';
 import { generateUUID } from '@/utils/effect-defaults';
 import { BUILTIN_PARTICLE_EFFECT_UUID } from '@/types/material';
 
@@ -23,7 +26,7 @@ export interface PrefabImportBundleResult {
 
 interface UuidBinding {
   relativePath: string;
-  kind: 'texture' | 'material' | 'shader';
+  kind: 'texture' | 'material' | 'shader' | 'mesh';
 }
 
 function normalizeRelPath(path: string): string {
@@ -54,6 +57,7 @@ function assetKindFromPath(path: string): UuidBinding['kind'] | null {
   if (path.endsWith('.mtl')) return 'material';
   if (path.endsWith('.effect')) return 'shader';
   if (/\.(png|jpg|jpeg|webp)$/i.test(path)) return 'texture';
+  if (/\.fbx$/i.test(path)) return 'mesh';
   return null;
 }
 
@@ -125,6 +129,13 @@ function textureUriForFile(file: PrefabImportFile): string {
   return normalizeRelPath(file.relativePath);
 }
 
+function meshUriForFile(file: PrefabImportFile): string {
+  if (file.encoding === 'base64') {
+    return `data:model/fbx;base64,${file.content}`;
+  }
+  return normalizeRelPath(file.relativePath);
+}
+
 function findMetaForAsset(files: PrefabImportFile[], asset: PrefabImportFile): PrefabImportFile | undefined {
   const metaRel = `${normalizeRelPath(asset.relativePath)}.meta`.toLowerCase();
   return files.find(f => normalizeRelPath(f.relativePath).toLowerCase() === metaRel);
@@ -163,6 +174,20 @@ function findTextureByMetaContent(files: PrefabImportFile[], ...uuids: (string |
   return undefined;
 }
 
+function findMeshByMetaContent(files: PrefabImportFile[], ...uuids: (string | undefined)[]): PrefabImportFile | undefined {
+  const needles = uuids.flatMap(u => uuidLookupKeys(u));
+  if (needles.length === 0) return undefined;
+
+  for (const file of files) {
+    if (!/\.fbx$/i.test(file.name)) continue;
+    const meta = findMetaForAsset(files, file);
+    if (!meta) continue;
+    const hay = meta.content.toLowerCase();
+    if (needles.some(n => hay.includes(n))) return file;
+  }
+  return undefined;
+}
+
 function bindEntry(
   entry: AssetEntry,
   files: PrefabImportFile[],
@@ -182,6 +207,10 @@ function bindEntry(
     file = findTextureByMetaContent(files, entry.meta?.spriteFrameUuid, entry.meta?.uuid);
   }
 
+  if (!file && entry.type === 'mesh') {
+    file = findMeshByMetaContent(files, entry.meta?.uuid);
+  }
+
   if (!file) {
     return {
       entry,
@@ -193,7 +222,9 @@ function bindEntry(
   const baseName = (file.relativePath.split('/').pop() ?? file.name);
   const uri = entry.type === 'texture' || binding?.kind === 'texture'
     ? textureUriForFile(file)
-    : normalizeRelPath(file.relativePath);
+    : entry.type === 'mesh' || binding?.kind === 'mesh'
+      ? meshUriForFile(file)
+      : normalizeRelPath(file.relativePath);
 
   let nextMeta = entry.meta;
   if (entry.type === 'material' && file.encoding !== 'base64') {
@@ -221,8 +252,8 @@ function bindEntry(
   return {
     entry: {
       ...entry,
-      name: baseName.replace(/\.(png|mtl|jpg|jpeg|webp|effect)$/i, ''),
-      type: binding?.kind === 'shader' ? 'shader' : entry.type,
+      name: baseName.replace(/\.(png|mtl|jpg|jpeg|webp|effect|fbx)$/i, ''),
+      type: binding?.kind === 'shader' ? 'shader' : binding?.kind === 'mesh' ? 'mesh' : entry.type,
       uri,
       meta: nextMeta
     },
@@ -252,12 +283,30 @@ export function bindPrefabImportAssets(
   });
 
   registry = relinkMaterialsToImportedShaders(registry);
+  registry = relinkMaterialsToImportedTextures(registry);
+
+  let nextProject: EffectProject = { ...project, assetRegistry: registry, root: bindAnimationClips(project.root, files) };
 
   return {
-    project: { ...project, assetRegistry: registry },
+    project: nextProject,
     boundAssetCount,
     warnings
   };
+}
+
+function bindAnimationClips(root: EffectProject['root'], files: PrefabImportFile[]): EffectProject['root'] {
+  let nextRoot = root;
+  for (const file of files) {
+    if (!file.name.toLowerCase().endsWith('.anim') || file.encoding === 'base64') continue;
+    const meta = findMetaForAsset(files, file);
+    const uuids = meta ? parseMetaUuids(meta.content) : [];
+    const clipUuid = uuids[0];
+    const clip = parseCocosAnimationClip(file.content, clipUuid);
+    if (clipUuid) {
+      nextRoot = bindAnimationClipToTree(nextRoot, clipUuid, clip);
+    }
+  }
+  return nextRoot;
 }
 
 function shortUuid(uuid: string): string {
@@ -313,6 +362,32 @@ function collectImportedShaderAssets(
   }
 
   return created;
+}
+
+/** Resolve materialDoc.mainTextureAssetId from `_props.mainTexture` Cocos UUID. */
+function relinkMaterialsToImportedTextures(registry: AssetEntry[]): AssetEntry[] {
+  return registry.map((entry) => {
+    if (entry.type !== 'material') return entry;
+
+    const doc = getMaterialDocument(entry);
+    if (doc.mainTextureAssetId) return entry;
+
+    const matConfig = particleConfigFromDocument(doc);
+    const textureUuid = matConfig.mainTextureUuid ?? entry.meta?.mainTextureUuid;
+    if (!textureUuid) return entry;
+
+    const texture = findTextureAssetByCocosUuid(registry, textureUuid);
+    if (!texture) return entry;
+
+    const nextDoc = { ...doc, mainTextureAssetId: texture.id };
+    return {
+      ...entry,
+      meta: {
+        ...entry.meta,
+        ...syncCompatMirrors(nextDoc)
+      }
+    };
+  });
 }
 
 /** Point materials at imported shaders when _effectAsset UUID matches. */
@@ -381,7 +456,7 @@ export async function readBrowserFileBundle(fileList: FileList | File[]): Promis
   const files: PrefabImportFile[] = [];
   for (const file of all) {
     const lower = file.name.toLowerCase();
-    if (!/\.(prefab|mtl|png|jpg|jpeg|webp|meta|effect)$/i.test(lower)) continue;
+    if (!/\.(prefab|mtl|png|jpg|jpeg|webp|meta|effect|anim|fbx)$/i.test(lower)) continue;
 
     let relativePath = file.name;
     if (file.webkitRelativePath) {
@@ -390,7 +465,7 @@ export async function readBrowserFileBundle(fileList: FileList | File[]): Promis
       relativePath = `${prefabDirPrefix}${file.name}`;
     }
 
-    if (/\.(png|jpg|jpeg|webp)$/i.test(lower)) {
+    if (/\.(png|jpg|jpeg|webp|fbx)$/i.test(lower)) {
       const buf = await file.arrayBuffer();
       const bytes = new Uint8Array(buf);
       let binary = '';

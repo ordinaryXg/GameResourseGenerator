@@ -6,6 +6,7 @@ import type { Particle3DConfig, RangeValue, ShapeType, RenderMode, BurstConfig, 
 import { GradientEditor } from '../inspector/GradientEditor';
 import { CurveEditor } from '../inspector/CurveEditor';
 import { TransformSection } from '../inspector/TransformSection';
+import { AnimationSection } from '../inspector/AnimationSection';
 import { AssetSlot } from '../inspector/AssetSlot';
 import { findNodeById } from '@/utils/project-tree';
 import { isEmitterNode, isGroupNode } from '@/types/project';
@@ -146,8 +147,8 @@ const Vector3RangeInput: React.FC<{
 
 export const NodeInspectorPanel: React.FC = () => {
   const {
-    project, selectedNodeId, currentEffect, updateEffectConfig,
-    updateNodeTransform, setNodeEnabled, updateEmitterAssetRefs
+    project, selectedNodeId, selectedNodeIds, currentEffect, updateEffectConfig,
+    updateNodeTransform, updateNodeAnimation, setNodeEnabled, updateEmitterAssetRefs
   } = useProjectStore();
   const { selectedModuleKey } = useAppStore();
   const config = currentEffect?.config as Particle3DConfig | undefined;
@@ -228,7 +229,46 @@ export const NodeInspectorPanel: React.FC = () => {
     );
   }
 
+  if (selectedNodeIds.length > 1) {
+    const names = selectedNodeIds
+      .map(id => findNodeById(project.root, id)?.name)
+      .filter(Boolean)
+      .slice(0, 4);
+    const extra = selectedNodeIds.length - names.length;
+    return (
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100%',
+        color: 'var(--text-secondary)',
+        fontSize: 14,
+        padding: 16,
+        textAlign: 'center',
+        gap: 8
+      }}>
+        <div>已选中 {selectedNodeIds.length} 个节点</div>
+        <div style={{ fontSize: 12, opacity: 0.85 }}>
+          {names.join('、')}{extra > 0 ? ` 等 ${extra} 个` : ''}
+        </div>
+        <div style={{ fontSize: 11, opacity: 0.7 }}>
+          单选节点后可编辑属性；Ctrl/⌘+点击多选，Shift+点击范围选
+        </div>
+      </div>
+    );
+  }
+
   const isEmitter = isEmitterNode(selectedNode);
+
+  const animationSection = selectedNode.animation && selectedNodeId ? (
+    <Section id="section-animation" title="动画 (Animation)" defaultOpen highlighted={selectedModuleKey === 'animation'}>
+      <AnimationSection
+        animation={selectedNode.animation}
+        onChange={(next) => updateNodeAnimation(selectedNodeId, () => next)}
+      />
+    </Section>
+  ) : null;
 
   if (!isEmitter || !currentEffect || !config) {
     return (
@@ -239,6 +279,7 @@ export const NodeInspectorPanel: React.FC = () => {
             onChange={(patch) => selectedNodeId && updateNodeTransform(selectedNodeId, patch)}
           />
         </Section>
+        {animationSection}
         {isGroupNode(selectedNode) && (
           <Section title="组" defaultOpen={false}>
             <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -288,6 +329,8 @@ export const NodeInspectorPanel: React.FC = () => {
           onChange={(patch) => selectedNodeId && updateNodeTransform(selectedNodeId, patch)}
         />
       </Section>
+
+      {animationSection}
 
       <Section id="section-mainModule" title="主模块" highlighted={isHighlighted('mainModule')}>
         <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 8 }}>

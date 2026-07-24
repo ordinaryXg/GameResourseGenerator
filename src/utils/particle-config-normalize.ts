@@ -29,7 +29,10 @@ export function normalizeParticle3DConfig(raw: Particle3DConfig): Particle3DConf
       },
       startRotation3D: config.mainModule?.startRotation3D ?? defaults.mainModule.startRotation3D,
       startColor: config.mainModule?.startColor ?? defaults.mainModule.startColor,
-      bursts: config.mainModule?.bursts ?? []
+      bursts: config.mainModule?.bursts ?? [],
+      simulationSpace: config.mainModule?.simulationSpace ?? defaults.mainModule.simulationSpace,
+      scaleSpace: config.mainModule?.scaleSpace ?? defaults.mainModule.scaleSpace,
+      useStartSize3D: config.mainModule?.useStartSize3D ?? defaults.mainModule.useStartSize3D
     },
     shapeModule: normalizeShapeModule(config.shapeModule),
     colorOverLifetime: {
@@ -45,7 +48,13 @@ export function normalizeParticle3DConfig(raw: Particle3DConfig): Particle3DConf
     rotationOverLifetime: {
       ...defaults.rotationOverLifetime,
       ...config.rotationOverLifetime,
-      rotation: config.rotationOverLifetime?.rotation ?? defaults.rotationOverLifetime.rotation
+      rotation: config.rotationOverLifetime?.rotation ?? defaults.rotationOverLifetime.rotation,
+      angularVelocityX: config.rotationOverLifetime?.angularVelocityX
+        ?? defaults.rotationOverLifetime.angularVelocityX,
+      angularVelocityY: config.rotationOverLifetime?.angularVelocityY
+        ?? defaults.rotationOverLifetime.angularVelocityY,
+      angularVelocityZ: config.rotationOverLifetime?.angularVelocityZ
+        ?? defaults.rotationOverLifetime.angularVelocityZ
     },
     velocityOverLifetime: {
       ...defaults.velocityOverLifetime,

@@ -21,6 +21,25 @@ describe('particle-size', () => {
     expect(coerceRangeValue(3).constant).toBe(3);
     expect(sampleRangeValue(undefined)).toBe(0);
   });
+
+  it('ignores Z axis for uniform billboard size when startSize3D is off', () => {
+    const cfg = getDefaultParticle3DConfig();
+    cfg.mainModule.useStartSize3D = false;
+    expect(computeParticleScale(cfg, 0.4, 0)).toBeCloseTo(0.4);
+  });
+
+  it('applies scaleSpace local vs world from transform context', () => {
+    const cfg = getDefaultParticle3DConfig();
+    cfg.mainModule.startSize3D.x = { mode: 'constant', constant: 2 };
+    const localCtx = {
+      localTransform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [2, 1, 1] },
+      worldTransform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [3, 3, 3] }
+    };
+    cfg.mainModule.scaleSpace = 'local';
+    expect(computeParticleScale(cfg, 2, 0, localCtx)).toBeCloseTo(4);
+    cfg.mainModule.scaleSpace = 'world';
+    expect(computeParticleScale(cfg, 2, 0, localCtx)).toBeCloseTo(6);
+  });
 });
 
 describe('texture-sheet legacy config', () => {

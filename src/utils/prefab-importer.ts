@@ -158,6 +158,9 @@ export function parseParticleSystemConfig(
       loop: (main.loop as boolean) ?? true,
       playOnAwake: (main.playOnAwake as boolean) ?? true,
       simulationSpeed: (main.simulationSpeed as number) ?? 1,
+      simulationSpace: ((psData._simulationSpace ?? psData.simulationSpace ?? 0) === 1 ? 'local' : 'world'),
+      scaleSpace: ((psData.scaleSpace ?? 0) === 1 ? 'local' : 'world'),
+      useStartSize3D: Boolean(main.startSize3D ?? psData.startSize3D),
       startDelay: curve(main.startDelay).constant ?? 0,
       startLifetime: curve(main.startLifetime),
       startSpeed: curve(main.startSpeed),
@@ -175,7 +178,7 @@ export function parseParticleSystemConfig(
       gravityModifier: curve(main.gravityModifier).constant ?? 0,
       rateOverTime: curve(main.rateOverTime).constant ?? 0,
       rateOverDistance: curve(main.rateOverDistance).constant ?? 0,
-      bursts: parseBursts(main.bursts)
+      bursts: parseBursts(main.bursts, prefabArray)
     },
     shapeModule: normalizeShapeModule({
       enabled: (shape?._enable ?? shape?.enable ?? true) as boolean,
@@ -208,7 +211,11 @@ export function parseParticleSystemConfig(
     },
     rotationOverLifetime: {
       enabled: (rotationOL?._enable ?? rotationOL?.enable ?? false) as boolean,
-      rotation: parseCurveFromPool(prefabArray, rotationOL?.z ?? rotationOL?.rotation)
+      separateAxes: Boolean(rotationOL?._separateAxes ?? rotationOL?.separateAxes ?? false),
+      rotation: parseCurveFromPool(prefabArray, rotationOL?.z ?? rotationOL?.rotation),
+      angularVelocityX: parseCurveRangeFromPool(prefabArray, rotationOL?.x),
+      angularVelocityY: parseCurveRangeFromPool(prefabArray, rotationOL?.y),
+      angularVelocityZ: parseCurveRangeFromPool(prefabArray, rotationOL?.z)
     },
     velocityOverLifetime: {
       enabled: (velocityOL?._enable ?? velocityOL?.enable ?? false) as boolean,
@@ -265,6 +272,21 @@ function findParticleSystemOnNode(
   return null;
 }
 
+function findAnimationComponent(
+  pool: unknown[],
+  node: Record<string, unknown>
+): { clipUuid?: string } | null {
+  const components = node._components as Array<{ __id__?: number }> | undefined;
+  if (!components) return null;
+  for (const compRef of components) {
+    const comp = resolvePrefabRef(pool, compRef) as Record<string, unknown> | null;
+    if (comp?.__type__ !== 'cc.Animation') continue;
+    const defaultClip = comp._defaultClip as { __uuid__?: string } | undefined;
+    return { clipUuid: defaultClip?.__uuid__ };
+  }
+  return null;
+}
+
 function parseNodeTree(pool: unknown[], nodeIdx: number, assets: ImportAssetCollector): EffectNode {
   const node = pool[nodeIdx] as Record<string, unknown>;
   if (!node || node.__type__ !== 'cc.Node') {
@@ -277,9 +299,11 @@ function parseNodeTree(pool: unknown[], nodeIdx: number, assets: ImportAssetColl
   const ps = findParticleSystemOnNode(pool, node);
 
   if (ps) {
-    const { materialUuid, spriteFrameUuid } = extractParticleAssetUuids(pool, ps);
+    const { materialUuid, spriteFrameUuid, meshUuid } = extractParticleAssetUuids(pool, ps);
     const mainTexture = assets.resolveTextureRef(spriteFrameUuid) ?? DEFAULT_TEXTURE_ASSET_ID;
     const material = assets.resolveMaterialRef(materialUuid) ?? DEFAULT_MATERIAL_ASSET_ID;
+    const mesh = assets.resolveMeshRef(meshUuid);
+    const animInfo = findAnimationComponent(pool, node);
     const emitter: ParticleEmitterNode = {
       type: 'emitter',
       id: generateUUID(),
@@ -287,7 +311,26 @@ function parseNodeTree(pool: unknown[], nodeIdx: number, assets: ImportAssetColl
       enabled,
       transform,
       config: parseParticleSystemConfig(pool, ps),
-      assetRefs: { mainTexture, material }
+      assetRefs: {
+        mainTexture,
+        material,
+        ...(mesh ? { mesh } : {})
+      },
+      ...(animInfo?.clipUuid
+        ? {
+            animation: {
+              clipUuid: animInfo.clipUuid,
+              duration: 1,
+              speed: 1,
+              loop: true,
+              position: {
+                x: { keys: [{ time: 0, value: 0 }], multiplier: 1 },
+                y: { keys: [{ time: 0, value: 0 }], multiplier: 1 },
+                z: { keys: [{ time: 0, value: 0 }], multiplier: 1 }
+              }
+            }
+          }
+        : {})
     };
     return emitter;
   }
@@ -303,12 +346,29 @@ function parseNodeTree(pool: unknown[], nodeIdx: number, assets: ImportAssetColl
     }
   }
 
+  const animInfo = findAnimationComponent(pool, node);
+
   return {
     type: 'group',
     id: generateUUID(),
     name,
     enabled,
     transform,
+    ...(animInfo?.clipUuid
+      ? {
+          animation: {
+            clipUuid: animInfo.clipUuid,
+            duration: 1,
+            speed: 1,
+            loop: true,
+            position: {
+              x: { keys: [{ time: 0, value: 0 }], multiplier: 1 },
+              y: { keys: [{ time: 0, value: 0 }], multiplier: 1 },
+              z: { keys: [{ time: 0, value: 0 }], multiplier: 1 }
+            }
+          }
+        }
+      : {}),
     children
   };
 }

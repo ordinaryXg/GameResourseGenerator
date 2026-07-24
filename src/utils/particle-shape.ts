@@ -281,10 +281,16 @@ export function sampleShapeEmitPosition(shapeInput: ShapeModuleConfig): THREE.Ve
   }
 }
 
+/** Cocos `particleEmitZAxis` — default emission direction when shape module is disabled. */
+export const DEFAULT_DISABLED_SHAPE_DIRECTION = new THREE.Vector3(0, 0, -1);
+
 /** Local-space initial velocity from shape + start speed. */
 export function sampleShapeEmitVelocity(shapeInput: ShapeModuleConfig, speed: number, emitPos?: THREE.Vector3): THREE.Vector3 {
   const shape = normalizeShapeModule(shapeInput);
-  if (!shape.enabled || speed <= 0) return new THREE.Vector3(0, 0, 0);
+  if (speed <= 0) return new THREE.Vector3(0, 0, 0);
+  if (!shape.enabled) {
+    return DEFAULT_DISABLED_SHAPE_DIRECTION.clone().multiplyScalar(speed);
+  }
 
   switch (shape.shapeType) {
     case 'cone':

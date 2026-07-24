@@ -1,4 +1,4 @@
-import type { Particle3DConfig } from './effect';
+import type { Particle3DConfig, CurveConfig } from './effect';
 import type { AssetEntry, EmitterAssetRefs } from './asset';
 
 export const FX_PROJECT_VERSION = '2.0.0' as const;
@@ -9,11 +9,25 @@ export interface Transform3D {
   scale: [number, number, number];
 }
 
+/** Parsed Cocos AnimationClip driving node local transform. */
+export interface NodeAnimationClip {
+  clipUuid?: string;
+  duration: number;
+  speed: number;
+  loop: boolean;
+  position: {
+    x: CurveConfig;
+    y: CurveConfig;
+    z: CurveConfig;
+  };
+}
+
 export interface EffectNodeBase {
   id: string;
   name: string;
   enabled: boolean;
   transform: Transform3D;
+  animation?: NodeAnimationClip;
 }
 
 export interface EffectGroupNode extends EffectNodeBase {

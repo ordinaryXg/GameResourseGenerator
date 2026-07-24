@@ -44,6 +44,14 @@ export function applyTransformToDirection(t: Transform3D, dir: THREE.Vector3): T
   return dir.clone().transformDirection(mat).normalize().multiplyScalar(len);
 }
 
+export function applyInverseTransformToDirection(t: Transform3D, dir: THREE.Vector3): THREE.Vector3 {
+  const mat = transformToMatrix(t);
+  const inv = mat.clone().invert();
+  const len = dir.length();
+  if (len === 0) return dir.clone();
+  return dir.clone().transformDirection(inv).normalize().multiplyScalar(len);
+}
+
 export interface CocosLocalTransform {
   _lpos: { __type__: 'cc.Vec3'; x: number; y: number; z: number };
   _lrot: { __type__: 'cc.Quat'; x: number; y: number; z: number; w: number };

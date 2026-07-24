@@ -8,6 +8,7 @@ import type { EffectNode } from '@/types/project';
 import type { Particle3DConfig } from '@/types/effect';
 import { isGroupNode, isEmitterNode } from '@/types/project';
 import { findNodeById, findParentOfNode } from '@/utils/project-tree';
+import type { NodeSelectionModifier } from '@/utils/hierarchy-selection';
 
 type HierarchyMenu =
   | { kind: 'node'; nodeId: string; x: number; y: number }
@@ -18,10 +19,10 @@ interface TreeRowProps {
   node: EffectNode;
   depth: number;
   sceneRootId: string;
-  selectedId: string | null;
+  selectedIds: string[];
   expanded: Set<string>;
   onToggleExpand: (id: string) => void;
-  onSelect: (id: string) => void;
+  onSelect: (id: string, modifier?: NodeSelectionModifier) => void;
   onSelectModule: (key: string) => void;
   selectedModuleKey: string | null;
   showModules: boolean;
@@ -38,7 +39,7 @@ interface TreeRowProps {
 }
 
 const TreeRow: React.FC<TreeRowProps> = ({
-  node, depth, sceneRootId, selectedId, expanded, onToggleExpand, onSelect, onSelectModule,
+  node, depth, sceneRootId, selectedIds, expanded, onToggleExpand, onSelect, onSelectModule,
   selectedModuleKey, showModules, onToggleEnabled,
   onContextMenuNode, onContextMenuModule,
   dropTargetId, onDragStartNode, onDragEndNode, onDragOverGroup, onDragLeaveGroup, onDropOnGroup
@@ -46,7 +47,8 @@ const TreeRow: React.FC<TreeRowProps> = ({
   const isGroup = isGroupNode(node);
   const isEmitter = isEmitterNode(node);
   const isOpen = expanded.has(node.id);
-  const isSelected = selectedId === node.id;
+  const isSelected = selectedIds.includes(node.id);
+  const isPrimary = selectedIds[selectedIds.length - 1] === node.id;
   const canExpand = isGroup || isEmitter;
   const isDropTarget = isGroup && dropTargetId === node.id;
   const canDrag = node.id !== sceneRootId;
@@ -62,7 +64,13 @@ const TreeRow: React.FC<TreeRowProps> = ({
           cursor: 'pointer',
           opacity: node.enabled ? 1 : 0.55,
           outline: isDropTarget ? '1px dashed var(--accent)' : undefined,
-          background: isDropTarget ? 'rgba(56, 139, 253, 0.12)' : undefined
+          background: isDropTarget
+            ? 'rgba(56, 139, 253, 0.12)'
+            : isSelected
+              ? isPrimary
+                ? undefined
+                : 'rgba(56, 139, 253, 0.08)'
+              : undefined
         }}
         draggable={canDrag}
         onDragStart={(e) => {
@@ -89,7 +97,11 @@ const TreeRow: React.FC<TreeRowProps> = ({
           if (dragId) onDropOnGroup(node.id, dragId);
           onDragLeaveGroup();
         }}
-        onClick={() => onSelect(node.id)}
+        onClick={(e) => {
+          if (e.shiftKey) onSelect(node.id, 'range');
+          else if (e.ctrlKey || e.metaKey) onSelect(node.id, 'toggle');
+          else onSelect(node.id, 'replace');
+        }}
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -126,7 +138,7 @@ const TreeRow: React.FC<TreeRowProps> = ({
           node={child}
           depth={depth + 1}
           sceneRootId={sceneRootId}
-          selectedId={selectedId}
+          selectedIds={selectedIds}
           expanded={expanded}
           onToggleExpand={onToggleExpand}
           onSelect={onSelect}
@@ -151,7 +163,7 @@ const TreeRow: React.FC<TreeRowProps> = ({
           style={{ paddingLeft: 8 + (depth + 1) * 14, fontSize: 11, opacity: 0.85, cursor: 'pointer', minHeight: 22 }}
           onClick={(e) => {
             e.stopPropagation();
-            onSelect(node.id);
+            onSelect(node.id, 'replace');
             onSelectModule(mod.key);
           }}
           onContextMenu={(e) => {
@@ -169,7 +181,7 @@ const TreeRow: React.FC<TreeRowProps> = ({
 
 export const HierarchyPanel: React.FC = () => {
   const {
-    project, selectedNodeId, selectNode, addEmitter, addGroup, removeNode, renameNode,
+    project, selectedNodeId, selectedNodeIds, selectNode, addEmitter, addGroup, removeNode, removeSelectedNodes, renameNode,
     projectPath, isDirty, soloNodeId, setSoloNode, setNodeEnabled, reparentNode,
     duplicateNode, updateEffectConfig
   } = useProjectStore();
@@ -213,8 +225,8 @@ export const HierarchyPanel: React.FC = () => {
     });
   }, []);
 
-  const handleSelect = useCallback((id: string) => {
-    selectNode(id);
+  const handleSelect = useCallback((id: string, modifier?: NodeSelectionModifier) => {
+    selectNode(id, modifier);
   }, [selectNode]);
 
   const handleContextMenuNode = useCallback((nodeId: string, e: React.MouseEvent) => {
@@ -367,24 +379,30 @@ export const HierarchyPanel: React.FC = () => {
       <div style={{ display: 'flex', gap: 4, padding: '6px 8px', borderBottom: '1px solid var(--border-color)' }}>
         <button className="btn-sm" onClick={() => addEmitter()} title="添加粒子系统">+ 发射器</button>
         <button className="btn-sm" onClick={() => addGroup()} title="添加组">+ 组</button>
-        {selectedNodeId && selectedNodeId !== project.root.id && (
+        {selectedNodeIds.length > 0 && selectedNodeIds.every(id => id !== project.root.id) && (
           <>
             <button
               className="btn-sm"
               onClick={() => {
-                removeNode(selectedNodeId);
-                showToastMessage('已删除节点');
+                if (selectedNodeIds.length > 1) {
+                  removeSelectedNodes();
+                } else if (selectedNodeId) {
+                  removeNode(selectedNodeId);
+                }
+                showToastMessage(selectedNodeIds.length > 1 ? '已删除选中节点' : '已删除节点');
               }}
             >
-              删除
+              删除{selectedNodeIds.length > 1 ? ` (${selectedNodeIds.length})` : ''}
             </button>
             <button
               className="btn-sm"
               onClick={() => {
-                reparentNode(selectedNodeId, project.root.id);
-                showToastMessage('已移动到根节点');
+                if (selectedNodeId) {
+                  reparentNode(selectedNodeId, project.root.id);
+                  showToastMessage('已移动到根节点');
+                }
               }}
-              title="移动到根"
+              title="将主选中节点移动到根"
             >
               ↑根
             </button>
@@ -430,7 +448,7 @@ export const HierarchyPanel: React.FC = () => {
             node={node}
             depth={0}
             sceneRootId={sceneRootId}
-            selectedId={selectedNodeId}
+            selectedIds={selectedNodeIds}
             expanded={expanded}
             onToggleExpand={toggleExpand}
             onSelect={handleSelect}
@@ -450,7 +468,7 @@ export const HierarchyPanel: React.FC = () => {
         ))}
       </div>
 
-      {selectedNode && (
+      {selectedNode && selectedNodeIds.length === 1 && (
         <div style={{ padding: 8, borderTop: '1px solid var(--border-color)' }}>
           <input
             defaultValue={selectedNode.name}

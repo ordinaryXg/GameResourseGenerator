@@ -751,19 +751,98 @@ function lerpAlphaKeys(alphaKeys: Array<{ time: number; alpha: number }>, time: 
   return sorted[sorted.length - 1].alpha / 255;
 }
 
-function parseCocosGradientObject(g: Record<string, unknown>): GradientConfig {
-  const colorKeys = g.colorKeys as Array<{ time: number; color: { r: number; g: number; b: number; a: number } }> | undefined;
-  const alphaKeys = g.alphaKeys as Array<{ time: number; alpha: number }> | undefined;
-  if (!colorKeys?.length) return { keys: [{ time: 0, color: [1, 1, 1, 1] }] };
+function normalizeCocosColorComponent(value: unknown, fallback = 255): number {
+  const n = Number(value ?? fallback);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function normalizeCocosColor(c: Record<string, unknown>): { r: number; g: number; b: number; a: number } {
+  const r = normalizeCocosColorComponent(c.r);
+  const g = normalizeCocosColorComponent(c.g);
+  const b = normalizeCocosColorComponent(c.b);
+  let a = normalizeCocosColorComponent(c.a, 255);
+  if (a <= 1) a *= 255;
+  return { r, g, b, a };
+}
+
+function resolveColorKey(
+  pool: unknown[],
+  raw: unknown
+): { time: number; color: { r: number; g: number; b: number; a: number } } | null {
+  const obj = resolvePrefabRef(pool, raw) as Record<string, unknown> | null;
+  if (!obj || typeof obj !== 'object') return null;
+
+  if (obj.__type__ === 'cc.ColorKey') {
+    const colorRaw = resolvePrefabRef(pool, obj.color) as Record<string, unknown> | null;
+    if (!colorRaw || typeof colorRaw !== 'object') return null;
+    return {
+      time: normalizeCocosColorComponent(obj.time, 0),
+      color: normalizeCocosColor(colorRaw)
+    };
+  }
+
+  if (obj.color && typeof obj.color === 'object') {
+    const colorRaw = resolvePrefabRef(pool, obj.color) as Record<string, unknown>;
+    if ('r' in colorRaw || '__type__' in colorRaw) {
+      return {
+        time: normalizeCocosColorComponent(obj.time, 0),
+        color: normalizeCocosColor(colorRaw)
+      };
+    }
+  }
+
+  return null;
+}
+
+function resolveAlphaKey(pool: unknown[], raw: unknown): { time: number; alpha: number } | null {
+  const obj = resolvePrefabRef(pool, raw) as Record<string, unknown> | null;
+  if (!obj || typeof obj !== 'object') return null;
+  if (obj.__type__ === 'cc.AlphaKey' || typeof obj.alpha === 'number') {
+    return {
+      time: normalizeCocosColorComponent(obj.time, 0),
+      alpha: normalizeCocosColorComponent(obj.alpha, 255)
+    };
+  }
+  return null;
+}
+
+function parseCocosGradientObject(pool: unknown[], g: Record<string, unknown>): GradientConfig {
+  const rawColorKeys = (g.colorKeys as unknown[]) ?? [];
+  const rawAlphaKeys = (g.alphaKeys as unknown[]) ?? [];
+
+  const colorKeys = rawColorKeys
+    .map((key) => resolveColorKey(pool, key))
+    .filter((key): key is NonNullable<typeof key> => key !== null);
+
+  const alphaKeys = rawAlphaKeys
+    .map((key) => resolveAlphaKey(pool, key))
+    .filter((key): key is NonNullable<typeof key> => key !== null);
+
+  if (!colorKeys.length && alphaKeys.length) {
+    return {
+      keys: alphaKeys.map((key) => ({
+        time: key.time,
+        color: [1, 1, 1, key.alpha / 255] as [number, number, number, number]
+      }))
+    };
+  }
+
+  if (!colorKeys.length) return { keys: [{ time: 0, color: [1, 1, 1, 1] }] };
+
   return {
-    keys: colorKeys.map(k => {
-      const t = k.time ?? 0;
-      const alpha = alphaKeys?.length
+    keys: colorKeys.map((key) => {
+      const t = key.time ?? 0;
+      const alpha = alphaKeys.length
         ? lerpAlphaKeys(alphaKeys, t)
-        : (k.color.a ?? 255) / 255;
+        : (key.color.a ?? 255) / 255;
       return {
         time: t,
-        color: [k.color.r / 255, k.color.g / 255, k.color.b / 255, alpha] as [number, number, number, number]
+        color: [key.color.r / 255, key.color.g / 255, key.color.b / 255, alpha] as [
+          number,
+          number,
+          number,
+          number
+        ]
       };
     })
   };
@@ -778,7 +857,7 @@ export function parseGradientFromPrefab(pool: unknown[], raw: unknown): Gradient
       else return parseGradient(gr);
     }
     if ((obj as Record<string, unknown>).__type__ === 'cc.Gradient') {
-      return parseCocosGradientObject(obj as Record<string, unknown>);
+      return parseCocosGradientObject(pool, obj as Record<string, unknown>);
     }
   }
   return parseGradient(obj);
@@ -815,7 +894,7 @@ export function parseGradient(raw: unknown): GradientConfig {
     return { keys: [{ time: 0, color: [c.r / 255, c.g / 255, c.b / 255, c.a / 255] }] };
   }
   if ((r as { colorKeys?: unknown[] }).colorKeys) {
-    return parseCocosGradientObject(r);
+    return parseCocosGradientObject([], r);
   }
   return { keys: [{ time: 0, color: [1, 1, 1, 1] }] };
 }
@@ -862,14 +941,18 @@ export function parseCurveFromPool(pool: unknown[], raw: unknown): CurveConfig {
   return parseCurve(resolved);
 }
 
-export function parseBursts(raw: unknown): BurstConfig[] {
+export function parseBursts(raw: unknown, pool?: unknown[]): BurstConfig[] {
   if (!Array.isArray(raw)) return [];
   return raw.map((b: Record<string, unknown>) => {
     const countRaw = b.count;
     let count = 50;
     if (typeof countRaw === 'number') count = countRaw;
     else if (countRaw && typeof countRaw === 'object') {
-      count = (countRaw as { constant?: number }).constant ?? 50;
+      if (pool && '__id__' in (countRaw as object)) {
+        count = parseCurveRangeFromPool(pool, countRaw).constant ?? 50;
+      } else {
+        count = (countRaw as { constant?: number }).constant ?? 50;
+      }
     }
     return {
       time: (b._time ?? b.time ?? 0) as number,

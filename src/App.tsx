@@ -35,7 +35,7 @@ const App: React.FC = () => {
   } = useAppStore();
 
   const {
-    project, currentEffect, isLoaded, isDirty, projectPath, selectedNodeId,
+    project, currentEffect, isLoaded, isDirty, projectPath, selectedNodeId, selectedNodeIds,
     createNewProjectInFolder, saveProject, saveProjectAs, closeProject, syncAutosave,
     undo, redo, undoStack, redoStack, updateEmitterAssetRefs
   } = useProjectStore();
@@ -145,10 +145,15 @@ const App: React.FC = () => {
   }, [project?.settings?.targetEngine]);
 
   const selectedNodeName = useMemo(() => {
-    if (!project || !selectedNodeId) return '无';
-    const node = findNodeById(project.root, selectedNodeId);
+    if (!project || selectedNodeIds.length === 0) return '无';
+    if (selectedNodeIds.length > 1) {
+      const primary = selectedNodeId ? findNodeById(project.root, selectedNodeId) : null;
+      const primaryName = primary?.name ?? '节点';
+      return `${primaryName} 等 ${selectedNodeIds.length} 个`;
+    }
+    const node = selectedNodeId ? findNodeById(project.root, selectedNodeId) : null;
     return node?.name ?? '无';
-  }, [project, selectedNodeId]);
+  }, [project, selectedNodeId, selectedNodeIds]);
 
   const getAssetById = useAssetStore(s => s.getAssetById);
 

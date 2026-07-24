@@ -33,11 +33,15 @@ export interface CollectPrefabFilesOptions {
 }
 
 function isImportCandidate(name: string): boolean {
-  return /\.(prefab|mtl|png|jpg|jpeg|webp|meta|effect)$/i.test(name);
+  return /\.(prefab|mtl|png|jpg|jpeg|webp|meta|effect|anim|fbx)$/i.test(name);
 }
 
 function isImage(name: string): boolean {
   return /\.(png|jpg|jpeg|webp)$/i.test(name);
+}
+
+function isBinaryMesh(name: string): boolean {
+  return /\.fbx$/i.test(name);
 }
 
 /** Collect prefab bundle files without scanning huge parent folders. */
@@ -56,6 +60,13 @@ export async function collectPrefabImportFiles(
     const name = opts.basename(fullPath);
     const relativePath = opts.relative(prefabDir, fullPath).split('\\').join('/');
     if (isImage(name)) {
+      files.push({
+        name,
+        relativePath,
+        content: await opts.readBase64(fullPath),
+        encoding: 'base64'
+      });
+    } else if (isBinaryMesh(name)) {
       files.push({
         name,
         relativePath,

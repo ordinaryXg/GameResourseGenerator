@@ -4,6 +4,8 @@ import { cloneProject } from '@/utils/project-tree';
 export interface EditorSnapshot {
   project: EffectProject;
   selectedNodeId: string | null;
+  selectedNodeIds?: string[];
+  selectionAnchorId?: string | null;
   soloNodeId: string | null;
 }
 
@@ -17,12 +19,16 @@ export const MAX_HISTORY = 50;
 export function createSnapshot(
   project: EffectProject,
   selectedNodeId: string | null,
-  soloNodeId: string | null
+  soloNodeId: string | null,
+  selectedNodeIds?: string[],
+  selectionAnchorId?: string | null
 ): EditorSnapshot {
   return {
     project: cloneProject(project),
     selectedNodeId,
-    soloNodeId
+    soloNodeId,
+    selectedNodeIds: selectedNodeIds ?? (selectedNodeId ? [selectedNodeId] : []),
+    selectionAnchorId: selectionAnchorId ?? selectedNodeId
   };
 }
 
@@ -48,7 +54,13 @@ export function popUndo(
   return {
     stacks: {
       undoStack,
-      redoStack: [...stacks.redoStack, createSnapshot(current.project, current.selectedNodeId, current.soloNodeId)]
+      redoStack: [...stacks.redoStack, createSnapshot(
+        current.project,
+        current.selectedNodeId,
+        current.soloNodeId,
+        current.selectedNodeIds,
+        current.selectionAnchorId
+      )]
     },
     snapshot
   };
@@ -65,7 +77,13 @@ export function popRedo(
   const snapshot = stacks.redoStack[stacks.redoStack.length - 1];
   return {
     stacks: {
-      undoStack: [...stacks.undoStack, createSnapshot(current.project, current.selectedNodeId, current.soloNodeId)],
+      undoStack: [...stacks.undoStack, createSnapshot(
+        current.project,
+        current.selectedNodeId,
+        current.soloNodeId,
+        current.selectedNodeIds,
+        current.selectionAnchorId
+      )],
       redoStack
     },
     snapshot

@@ -5,6 +5,7 @@ import { configureParticleTexture, disposeSpriteMaterial } from '@/utils/texture
 import { computeParticleScale, sampleStartParticleSize } from '@/utils/particle-size';
 import { sampleEmitMotion } from '@/utils/particle-shape';
 import { wrapEmissionClock } from '@/utils/particle-loop';
+import { measureFrameDelta, scaleSimulationDelta } from '@/utils/simulation-delta';
 
 export interface AxisScreenVector {
   id: 'x' | 'y' | 'z';
@@ -39,6 +40,7 @@ export abstract class BaseParticlePreview {
   protected config: Particle3DConfig | null = null;
   private fpsFrameCount = 0;
   private fpsLastTime = 0;
+  private lastFrameTime = 0;
   private onFpsUpdate: ((fps: number) => void) | null = null;
 
   setFpsListener(listener: ((fps: number) => void) | null) {
@@ -166,6 +168,7 @@ export abstract class BaseParticlePreview {
     this.elapsedTime = 0;
     this.emitTimer = 0;
     this.burstsTriggered.clear();
+    this.lastFrameTime = 0;
   }
 
   protected canSimulate(): boolean {
@@ -174,17 +177,20 @@ export abstract class BaseParticlePreview {
 
   private start() {
     if (!this.renderer) return;
+    this.stop();
     this.fpsLastTime = performance.now();
-    const animate = () => {
+    this.lastFrameTime = this.fpsLastTime;
+    const animate = (now: number) => {
       this.animationId = requestAnimationFrame(animate);
+      const dt = measureFrameDelta(now, this.lastFrameTime);
+      this.lastFrameTime = now;
       try {
-        if (this.isPlaying && this.canSimulate()) this.update(0.016);
+        if (this.isPlaying && this.canSimulate()) this.update(dt);
         this.renderer!.render(this.scene, this.getCamera());
       } catch (err) {
         console.error('[Preview] render loop error:', err);
       }
       this.fpsFrameCount += 1;
-      const now = performance.now();
       if (now - this.fpsLastTime >= 500) {
         const fps = Math.round(this.fpsFrameCount * 1000 / (now - this.fpsLastTime));
         this.fpsFrameCount = 0;
@@ -192,7 +198,7 @@ export abstract class BaseParticlePreview {
         this.onFpsUpdate?.(fps);
       }
     };
-    animate();
+    animate(this.lastFrameTime);
   }
 
   private stop() {
@@ -202,7 +208,8 @@ export abstract class BaseParticlePreview {
   protected update(dt: number) {
     if (!this.config) return;
     const cfg = this.config;
-    this.elapsedTime += dt;
+    const simDt = scaleSimulationDelta(Math.min(dt, 0.1), cfg.mainModule.simulationSpeed ?? 1);
+    this.elapsedTime += simDt;
 
     const duration = cfg.mainModule.duration;
     const shouldLoop = cfg.mainModule.loop;
@@ -224,7 +231,7 @@ export abstract class BaseParticlePreview {
 
     if (!pastDuration) {
       if (cfg.mainModule.rateOverTime > 0) {
-        this.emitTimer += dt;
+        this.emitTimer += simDt;
         const interval = 1 / cfg.mainModule.rateOverTime;
         while (this.emitTimer >= interval) {
           this.emitTimer -= interval;
@@ -246,17 +253,16 @@ export abstract class BaseParticlePreview {
       }
     }
 
-    const dtCapped = Math.min(dt, 0.1);
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
-      p.elapsed += dtCapped;
+      p.elapsed += simDt;
       p.life = p.elapsed / p.maxLife;
       if (p.life >= 1) { this.scene.remove(p.sprite); disposeSpriteMaterial(p.material); this.particles.splice(i, 1); continue; }
 
-      p.position.x += p.velocity.x * dtCapped;
-      p.position.y += p.velocity.y * dtCapped;
-      p.position.z += p.velocity.z * dtCapped;
-      this.applyForces(p, cfg, dtCapped);
+      p.position.x += p.velocity.x * simDt;
+      p.position.y += p.velocity.y * simDt;
+      p.position.z += p.velocity.z * simDt;
+      this.applyForces(p, cfg, simDt);
 
       p.sprite.position.copy(p.position);
       const rgba = composeParticleColor(

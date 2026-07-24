@@ -50,11 +50,12 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({ prefabDrop }) => {
   } = useAppStore();
   const { project, soloNodeId, projectDir, selectedNodeId } = useProjectStore();
   const getAssetById = useAssetStore(s => s.getAssetById);
+  const getMergedAssets = useAssetStore(s => s.getMergedAssets);
   const preview = previewRef.current;
 
-  const previewSources = useMemo(() => {
-    if (!project || effectType !== 'particle3d') return [];
-    return collectEmitterPreviewSources(project.root, { soloId: soloNodeId });
+  const emitterPreviewIds = useMemo(() => {
+    if (!project || effectType !== 'particle3d') return [] as string[];
+    return collectEmitterPreviewSources(project.root, { soloId: soloNodeId }).map(s => s.id);
   }, [project, soloNodeId, effectType, project?.metadata.updatedAt]);
 
   useEffect(() => {
@@ -105,26 +106,32 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({ prefabDrop }) => {
   }, [previewBackground, effectType]);
 
   useEffect(() => {
-    if (effectType !== 'particle3d') return;
+    if (!project || effectType !== 'particle3d') return;
     const inst = previewRef.current as CompositeParticlePreview;
-    inst.setEmitters(previewSources, { getAsset: getAssetById, projectDir });
+    inst.setPreviewContext({
+      root: project.root,
+      soloId: soloNodeId,
+      getAsset: getAssetById,
+      getAllAssets: getMergedAssets,
+      projectDir
+    });
     inst.resize();
-  }, [previewSources, effectType, getAssetById, projectDir]);
+  }, [project, soloNodeId, effectType, project?.metadata.updatedAt, getAssetById, getMergedAssets, projectDir]);
 
   useEffect(() => {
     if (effectType !== 'particle3d') return;
     const inst = previewRef.current as CompositeParticlePreview;
     inst.setEmitterGizmosVisible(showEmitterGizmos);
-  }, [showEmitterGizmos, effectType, previewSources]);
+  }, [showEmitterGizmos, effectType, emitterPreviewIds]);
 
   useEffect(() => {
     if (effectType !== 'particle3d') return;
     const inst = previewRef.current as CompositeParticlePreview;
-    const selectedEmitterId = selectedNodeId && previewSources.some(s => s.id === selectedNodeId)
+    const selectedEmitterId = selectedNodeId && emitterPreviewIds.includes(selectedNodeId)
       ? selectedNodeId
       : null;
     inst.setEmitterGizmoSelection(selectedEmitterId);
-  }, [selectedNodeId, previewSources, effectType]);
+  }, [selectedNodeId, emitterPreviewIds, effectType]);
 
   useEffect(() => {
     if (previewPlaying) previewRef.current.play();
@@ -167,7 +174,7 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({ prefabDrop }) => {
           重置
         </button>
         <span style={{ fontSize: 12, color: 'var(--text-secondary)', flex: 1 }}>
-          {effectType === 'particle2d' ? '2D 粒子预览' : `3D 合成预览 (${previewSources.length} 发射器)`}
+          {effectType === 'particle2d' ? '2D 粒子预览' : `3D 合成预览 (${emitterPreviewIds.length} 发射器)`}
         </span>
         {effectType === 'particle3d' && (
           <span style={{ fontSize: 11, color: 'var(--text-secondary)', minWidth: 52, textAlign: 'right' }}>
