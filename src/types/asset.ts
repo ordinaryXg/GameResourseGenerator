@@ -29,6 +29,10 @@ export interface AssetEntry {
     mainTextureAssetId?: string;
     /** Imported Cocos texture UUID when no local asset is bound. */
     mainTextureUuid?: string;
+    /** Project Shader asset used as Effect (Plan B). */
+    effectShaderAssetId?: string;
+    /** Full material document (Plan B canonical). */
+    materialDoc?: import('@/types/material').MaterialDocument;
     description?: string;
     category?: string;
     /** 项目 Shader 资产的 Effect 源码 */

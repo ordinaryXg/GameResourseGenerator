@@ -1,12 +1,13 @@
 import type { AssetEntry } from '@/types/asset';
-import type { CocosColorRGBA, ParticleMaterialConfig } from '@/types/material';
+import type { MaterialDocument, ParticleMaterialConfig } from '@/types/material';
 import { BUILTIN_PARTICLE_EFFECT_UUID } from '@/types/material';
 import {
-  blendFromTechIdx,
-  getParticleMaterialConfig,
-  normalizeTintColor,
-  particleMaterialMetaPatch
-} from '@/utils/particle-material';
+  getMaterialDocument,
+  getEffectUuid,
+  particleConfigFromDocument,
+  syncCompatMirrors
+} from '@/utils/material-document';
+import { getParticleMaterialConfig } from '@/utils/particle-material';
 
 function readUuid(raw: unknown): string | undefined {
   if (!raw || typeof raw !== 'object') return undefined;
@@ -14,20 +15,7 @@ function readUuid(raw: unknown): string | undefined {
   return typeof u === 'string' && u ? u : undefined;
 }
 
-function readTintFromProps(props: unknown): CocosColorRGBA {
-  if (!Array.isArray(props) || !props[0] || typeof props[0] !== 'object') {
-    return normalizeTintColor(undefined);
-  }
-  const tint = (props[0] as { tintColor?: unknown }).tintColor;
-  return normalizeTintColor(tint);
-}
-
-function readMainTextureUuid(props: unknown): string | undefined {
-  if (!Array.isArray(props) || !props[0] || typeof props[0] !== 'object') return undefined;
-  return readUuid((props[0] as { mainTexture?: unknown }).mainTexture);
-}
-
-/** Parse Cocos `.mtl` JSON into material meta fields. */
+/** Parse Cocos `.mtl` JSON into material meta fields (+ materialDoc). */
 export function parseMtlContent(json: string): Partial<NonNullable<AssetEntry['meta']>> | null {
   try {
     const raw = JSON.parse(json) as Record<string, unknown>;
@@ -38,23 +26,37 @@ export function parseMtlContent(json: string): Partial<NonNullable<AssetEntry['m
 }
 
 export function parseMtlObject(raw: Record<string, unknown>): Partial<NonNullable<AssetEntry['meta']>> {
-  const fxMeta = raw._fxStudioMeta as { blend?: string } | undefined;
-  const techIdx = typeof raw._techIdx === 'number' ? (raw._techIdx === 0 ? 0 : 1) : undefined;
-  const blendFromFx = fxMeta?.blend === 'alpha' || fxMeta?.blend === 'additive'
-    ? fxMeta.blend
-    : undefined;
   const effectUuid = readUuid(raw._effectAsset) ?? BUILTIN_PARTICLE_EFFECT_UUID;
-  const tintColor = readTintFromProps(raw._props);
-  const mainTextureUuid = readMainTextureUuid(raw._props);
+  const techIdx = typeof raw._techIdx === 'number' ? raw._techIdx : 1;
+  const fxMeta = raw._fxStudioMeta as { blend?: string; effectShaderAssetId?: string } | undefined;
 
-  const resolvedTech = techIdx ?? (blendFromFx ? (blendFromFx === 'alpha' ? 0 : 1) : 1);
-  return particleMaterialMetaPatch({
-    effectUuid,
-    techIdx: resolvedTech,
-    blend: blendFromFx ?? blendFromTechIdx(resolvedTech),
-    tintColor,
-    mainTextureUuid
-  });
+  const defines = Array.isArray(raw._defines) ? raw._defines as MaterialDocument['defines'] : [{}];
+  const states = Array.isArray(raw._states) ? raw._states as MaterialDocument['states'] : [];
+  const props = Array.isArray(raw._props) ? raw._props as MaterialDocument['props'] : [{}];
+
+  const effect: MaterialDocument['effect'] =
+    effectUuid === BUILTIN_PARTICLE_EFFECT_UUID
+      ? { kind: 'builtin-uuid', uuid: effectUuid }
+      : { kind: 'external-uuid', uuid: effectUuid };
+
+  const doc: MaterialDocument = {
+    effect: fxMeta?.effectShaderAssetId
+      ? { kind: 'shader-asset', assetId: fxMeta.effectShaderAssetId, uuid: effectUuid }
+      : effect,
+    techIdx,
+    defines: defines.length ? defines as MaterialDocument['defines'] : [{}],
+    states: states.length ? states as MaterialDocument['states'] : [],
+    props: props.length ? props as MaterialDocument['props'] : [{}]
+  };
+
+  return syncCompatMirrors(getMaterialDocument({
+    id: 'tmp',
+    name: typeof raw._name === 'string' ? raw._name : 'material',
+    type: 'material',
+    source: 'imported',
+    uri: '',
+    meta: { materialDoc: doc, effectUuid, techIdx }
+  }));
 }
 
 export interface SerializeMaterialOptions {
@@ -63,23 +65,30 @@ export interface SerializeMaterialOptions {
   mainTextureUuid?: string;
 }
 
-/** Build a `cc.Material` object for export / preview. */
-export function serializeParticleMaterial(
-  config: ParticleMaterialConfig,
+function ensureMainTexture(
+  props: Record<string, unknown>[],
+  mainTextureUuid?: string
+): Record<string, unknown>[] {
+  if (!mainTextureUuid) return props;
+  const next = props.map((p) => ({ ...p }));
+  const first = { ...(next[0] ?? {}) };
+  first.mainTexture = { __uuid__: mainTextureUuid };
+  next[0] = first;
+  return next;
+}
+
+/** Serialize MaterialDocument to `cc.Material` JSON. */
+export function serializeMaterialDocument(
+  doc: MaterialDocument,
   options: SerializeMaterialOptions = {}
 ): Record<string, unknown> {
-  const props: Record<string, unknown> = {
-    tintColor: {
-      __type__: 'cc.Color',
-      r: config.tintColor.r,
-      g: config.tintColor.g,
-      b: config.tintColor.b,
-      a: config.tintColor.a
-    }
+  const props = ensureMainTexture(doc.props, options.mainTextureUuid);
+  const effectUuid = getEffectUuid(doc);
+  const fxMeta: Record<string, unknown> = {
+    blend: doc.techIdx === 0 ? 'alpha' : 'additive'
   };
-  const texUuid = options.mainTextureUuid ?? config.mainTextureUuid;
-  if (texUuid) {
-    props.mainTexture = { __uuid__: texUuid };
+  if (doc.effect.kind === 'shader-asset') {
+    fxMeta.effectShaderAssetId = doc.effect.assetId;
   }
 
   return {
@@ -87,33 +96,65 @@ export function serializeParticleMaterial(
     _name: options.name ?? '',
     _objFlags: 0,
     _native: '',
-    _effectAsset: { __uuid__: config.effectUuid || BUILTIN_PARTICLE_EFFECT_UUID },
-    _techIdx: config.techIdx === 0 ? 0 : 1,
-    _defines: [{}],
-    _states: [{
-      rasterizerState: {},
-      depthStencilState: {},
-      blendState: { targets: [{}] }
-    }],
-    _props: [props],
-    _fxStudioMeta: {
-      blend: config.blend
-    }
+    _effectAsset: { __uuid__: effectUuid },
+    _techIdx: doc.techIdx,
+    _defines: doc.defines.length ? doc.defines : [{}],
+    _states: doc.states.length
+      ? doc.states
+      : [{
+          rasterizerState: {},
+          depthStencilState: {},
+          blendState: { targets: [{}] }
+        }],
+    _props: props.length ? props : [{}],
+    _fxStudioMeta: fxMeta
   };
+}
+
+/** Build a `cc.Material` object for export / preview (Plan A compat wrapper). */
+export function serializeParticleMaterial(
+  config: ParticleMaterialConfig,
+  options: SerializeMaterialOptions = {}
+): Record<string, unknown> {
+  const doc = getMaterialDocument({
+    id: 'tmp',
+    name: options.name ?? '',
+    type: 'material',
+    source: 'project',
+    uri: '',
+    meta: {
+      effectUuid: config.effectUuid,
+      techIdx: config.techIdx,
+      blend: config.blend,
+      tintColor: config.tintColor,
+      mainTextureAssetId: config.mainTextureAssetId,
+      mainTextureUuid: config.mainTextureUuid
+    }
+  });
+  return serializeMaterialDocument(doc, {
+    name: options.name,
+    mainTextureUuid: options.mainTextureUuid ?? config.mainTextureUuid
+  });
 }
 
 export function serializeMaterialAsset(
   asset: AssetEntry,
   options: SerializeMaterialOptions = {}
 ): Record<string, unknown> {
-  const config = getParticleMaterialConfig(asset);
-  return serializeParticleMaterial(config, {
+  const doc = getMaterialDocument(asset);
+  const cfg = particleConfigFromDocument(doc);
+  return serializeMaterialDocument(doc, {
     name: options.name ?? asset.name,
-    mainTextureUuid: options.mainTextureUuid
+    mainTextureUuid: options.mainTextureUuid ?? cfg.mainTextureUuid
   });
 }
 
 /** Pretty JSON for inspector preview. */
 export function formatMaterialSourcePreview(asset: AssetEntry): string {
   return JSON.stringify(serializeMaterialAsset(asset), null, 2);
+}
+
+/** @deprecated use getMaterialDocument — kept for older call sites */
+export function parseMtlToParticleConfig(asset: AssetEntry): ParticleMaterialConfig {
+  return getParticleMaterialConfig(asset);
 }

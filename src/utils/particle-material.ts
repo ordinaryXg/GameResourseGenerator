@@ -52,7 +52,35 @@ export function tintFromCssHex(hex: string, alpha = 255): CocosColorRGBA {
 
 /** Read particle material config from an AssetEntry (legacy `meta.blend` compatible). */
 export function getParticleMaterialConfig(asset: AssetEntry | null | undefined): ParticleMaterialConfig {
+  // Lazy import avoided: material-document imports from this file for tint helpers.
+  // Keep dual path: prefer materialDoc mirrors when present.
   const meta = asset?.meta ?? {};
+  if (meta.materialDoc) {
+    const doc = meta.materialDoc;
+    const tint = normalizeTintColor(
+      Array.isArray(doc.props) && doc.props[0] && typeof doc.props[0] === 'object'
+        ? (doc.props[0] as { tintColor?: unknown }).tintColor
+        : meta.tintColor
+    );
+    const first = Array.isArray(doc.props) ? doc.props[0] as Record<string, unknown> | undefined : undefined;
+    const mt = first?.mainTexture;
+    const mainTextureUuid = mt && typeof mt === 'object' && typeof (mt as { __uuid__?: string }).__uuid__ === 'string'
+      ? (mt as { __uuid__: string }).__uuid__
+      : (typeof meta.mainTextureUuid === 'string' ? meta.mainTextureUuid : undefined);
+    const effectUuid = doc.effect?.kind === 'shader-asset'
+      ? (doc.effect.uuid || BUILTIN_PARTICLE_EFFECT_UUID)
+      : (doc.effect?.uuid || meta.effectUuid || BUILTIN_PARTICLE_EFFECT_UUID);
+    const techIdx = typeof doc.techIdx === 'number' ? doc.techIdx : 1;
+    return {
+      effectUuid,
+      techIdx,
+      blend: techIdx === 0 ? 'alpha' : 'additive',
+      tintColor: tint,
+      mainTextureAssetId: doc.mainTextureAssetId ?? (typeof meta.mainTextureAssetId === 'string' ? meta.mainTextureAssetId : undefined),
+      mainTextureUuid
+    };
+  }
+
   const blendRaw = meta.blend === 'alpha' || meta.blend === 'additive' ? meta.blend : null;
   const techFromMeta = typeof meta.techIdx === 'number' ? meta.techIdx : null;
   const techIdx = techFromMeta ?? (blendRaw ? techIdxFromBlend(blendRaw) : 1);
@@ -76,8 +104,13 @@ export function getParticleMaterialConfig(asset: AssetEntry | null | undefined):
 
 /** Build meta patch for material fields (merges with existing meta via updateProjectAsset). */
 export function particleMaterialMetaPatch(
-  config: Partial<ParticleMaterialConfig> & { blend?: ParticleBlendMode; techIdx?: number }
+  config: Partial<ParticleMaterialConfig> & { blend?: ParticleBlendMode; techIdx?: number },
+  currentAsset?: AssetEntry | null
 ): NonNullable<AssetEntry['meta']> {
+  // Prefer updating through materialDoc when we have an asset context
+  if (currentAsset) {
+    // deferred to callers using materialDocumentMetaPatch for full updates
+  }
   const patch: NonNullable<AssetEntry['meta']> = {};
   if (config.effectUuid !== undefined) patch.effectUuid = config.effectUuid;
   if (config.tintColor !== undefined) patch.tintColor = normalizeTintColor(config.tintColor);

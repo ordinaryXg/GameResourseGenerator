@@ -18,6 +18,8 @@ import {
   type ExportAssetSummary
 } from './asset-texture-export';
 import { getParticleMaterialConfig } from './particle-material';
+import { getMaterialDocument, getEffectUuid } from './material-document';
+import { serializeMaterialDocument } from './mtl-io';
 import { getEmitterNodes } from './preview-sources';
 
 export interface ProjectExportAssetFile {
@@ -59,6 +61,7 @@ function collectProjectExportBindings(
     effectUuid: string;
     blend: 'additive' | 'alpha';
     name: string;
+    materialAssetId?: string;
   }>;
   emitterBindings: Map<string, { materialUuid: string; spriteFrameUuid: string }>;
   emitterSummaries: ExportAssetSummary[];
@@ -76,6 +79,7 @@ function collectProjectExportBindings(
     effectUuid: string;
     blend: 'additive' | 'alpha';
     name: string;
+    materialAssetId?: string;
   }>();
   const emitterBindings = new Map<string, { materialUuid: string; spriteFrameUuid: string }>();
   const emitterSummaries: ExportAssetSummary[] = [];
@@ -88,6 +92,7 @@ function collectProjectExportBindings(
     const tex = textureByAssetId.get(texAsset.id)!;
     const matAsset = emitter.assetRefs.material ? getAsset(emitter.assetRefs.material) : null;
     const matConfig = getParticleMaterialConfig(matAsset);
+    const matDoc = getMaterialDocument(matAsset);
     // Material may override mainTexture via its own prop; otherwise use emitter texture.
     let spriteFrameUuid = tex.spriteFrameUuid;
     if (matConfig.mainTextureAssetId) {
@@ -103,7 +108,7 @@ function collectProjectExportBindings(
       spriteFrameUuid = matConfig.mainTextureUuid;
     }
 
-    const matKey = `${emitter.assetRefs.material ?? 'default'}|${spriteFrameUuid}|${matConfig.techIdx}|${matConfig.tintColor.r},${matConfig.tintColor.g},${matConfig.tintColor.b},${matConfig.tintColor.a}`;
+    const matKey = `${emitter.assetRefs.material ?? 'default'}|${spriteFrameUuid}|${JSON.stringify(matDoc)}`;
     if (!materialByKey.has(matKey)) {
       materialByKey.set(matKey, {
         uuid: generateUUID(),
@@ -111,9 +116,10 @@ function collectProjectExportBindings(
         spriteFrameUuid,
         fileBase: sanitizeExportBaseName(matAsset?.name ?? `${emitter.name}-particle`),
         tintColor: matConfig.tintColor,
-        effectUuid: matConfig.effectUuid,
+        effectUuid: getEffectUuid(matDoc),
         blend: matConfig.blend,
-        name: matAsset?.name ?? `${emitter.name}-particle`
+        name: matAsset?.name ?? `${emitter.name}-particle`,
+        materialAssetId: matAsset?.id
       });
     }
     const mat = materialByKey.get(matKey)!;
@@ -165,20 +171,23 @@ export function generateProjectPrefab(
       fileBase = `${fileBase}-${i}`;
     }
     usedMaterialNames.add(fileBase);
-    assetFiles.push({
-      fileName: `${fileBase}.mtl`,
-      content: JSON.stringify(
-        buildParticleMaterial({
+    const matAsset = mat.materialAssetId ? (ctx?.getAsset?.(mat.materialAssetId) ?? null) : null;
+    const mtlJson = matAsset
+      ? serializeMaterialDocument(getMaterialDocument(matAsset), {
+          name: mat.name,
+          mainTextureUuid: mat.spriteFrameUuid
+        })
+      : buildParticleMaterial({
           spriteFrameUuid: mat.spriteFrameUuid,
           techIdx: mat.techIdx,
           name: mat.name,
           tintColor: mat.tintColor,
           effectUuid: mat.effectUuid,
           blend: mat.blend
-        }),
-        null,
-        2
-      ),
+        });
+    assetFiles.push({
+      fileName: `${fileBase}.mtl`,
+      content: JSON.stringify(mtlJson, null, 2),
       metaFileName: `${fileBase}.mtl.meta`,
       metaContent: JSON.stringify(buildMaterialMeta(mat.uuid), null, 2)
     });
@@ -344,19 +353,16 @@ export function generatePrefab(effectConfig: EffectConfig, ctx?: PrefabExportCon
   const techIdx = resolveMaterialTechIdx(ctx?.assetRefs?.material, getAsset);
   const matAsset = ctx?.assetRefs?.material ? getAsset(ctx.assetRefs.material) : null;
   const matConfig = getParticleMaterialConfig(matAsset);
+  const matDoc = getMaterialDocument(matAsset);
 
   const prefabContent = new CocosPrefabBuilder().build(
     config, name, materialUuid, texture.spriteFrameUuid
   );
   const metaContent = JSON.stringify(buildPrefabMeta(prefabUuid, name), null, 2);
   const materialContent = JSON.stringify(
-    buildParticleMaterial({
-      spriteFrameUuid: matConfig.mainTextureUuid ?? texture.spriteFrameUuid,
-      techIdx,
+    serializeMaterialDocument(matDoc, {
       name: matAsset?.name ?? `${name}-particle`,
-      tintColor: matConfig.tintColor,
-      effectUuid: matConfig.effectUuid,
-      blend: matConfig.blend
+      mainTextureUuid: matConfig.mainTextureUuid ?? texture.spriteFrameUuid
     }),
     null,
     2
