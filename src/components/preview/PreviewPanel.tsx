@@ -58,6 +58,11 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({ prefabDrop }) => {
   }, [project, soloNodeId, effectType, project?.metadata.updatedAt]);
 
   useEffect(() => {
+    if (!project) return;
+    previewRef.current.reset();
+  }, [project?.id, effectType]);
+
+  useEffect(() => {
     previewRef.current = getPreview(effectType);
   }, [effectType]);
 
@@ -103,6 +108,7 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({ prefabDrop }) => {
     if (effectType !== 'particle3d') return;
     const inst = previewRef.current as CompositeParticlePreview;
     inst.setEmitters(previewSources, { getAsset: getAssetById, projectDir });
+    inst.resize();
   }, [previewSources, effectType, getAssetById, projectDir]);
 
   useEffect(() => {
@@ -125,9 +131,16 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({ prefabDrop }) => {
     else previewRef.current.pause();
   }, [previewPlaying, effectType]);
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => { previewRef.current.onMouseDown(e.clientX, e.clientY); }, [effectType]);
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.button === 1) e.preventDefault();
+    previewRef.current.onMouseDown(e.clientX, e.clientY, e.button);
+  }, [effectType]);
   const handleMouseMove = useCallback((e: React.MouseEvent) => { previewRef.current.onMouseMove(e.clientX, e.clientY); }, [effectType]);
-  const handleMouseUp = useCallback(() => { previewRef.current.onMouseUp(); }, [effectType]);
+  const handleMouseUp = useCallback((e: React.MouseEvent) => { previewRef.current.onMouseUp(e.button); }, [effectType]);
+  const handleMouseLeave = useCallback(() => { previewRef.current.onMouseUp(); }, [effectType]);
+  const handleAuxClick = useCallback((e: React.MouseEvent) => {
+    if (e.button === 1) e.preventDefault();
+  }, []);
   const handleWheel = useCallback((e: React.WheelEvent) => { previewRef.current.onWheel(e.deltaY); }, [effectType]);
 
   useEffect(() => {
@@ -198,7 +211,8 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({ prefabDrop }) => {
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
+        onAuxClick={handleAuxClick}
         onWheel={handleWheel}
         onDragEnter={prefabDrop?.onDragEnter}
         onDragOver={prefabDrop?.onDragOver}

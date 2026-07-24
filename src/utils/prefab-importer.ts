@@ -14,6 +14,8 @@ import {
   DEFAULT_MATERIAL_ASSET_ID
 } from './project-factory';
 import { ImportAssetCollector, extractParticleAssetUuids } from './import-asset-resolver';
+import { normalizeShapeModule, readShapeVec3 } from './particle-shape';
+import type { ShapeModuleConfig } from '@/types/effect';
 
 export interface ImportResult {
   effectConfig: EffectConfig;
@@ -175,14 +177,27 @@ export function parseParticleSystemConfig(
       rateOverDistance: curve(main.rateOverDistance).constant ?? 0,
       bursts: parseBursts(main.bursts)
     },
-    shapeModule: {
+    shapeModule: normalizeShapeModule({
       enabled: (shape?._enable ?? shape?.enable ?? true) as boolean,
       shapeType: parseShapeType(shape?._shapeType ?? shape?.shapeType),
+      emitFrom: parseEmitFrom(shape?.emitFrom),
       radius: (shape?.radius as number) ?? 1,
+      radiusThickness: (shape?.radiusThickness as number) ?? 1,
       angle: shape?._angle != null ? (shape._angle as number) * (180 / Math.PI) : (shape?.angle as number) ?? 25,
+      length: (shape?.length as number) ?? 0,
       arc: shape?._arc != null ? (shape._arc as number) * (180 / Math.PI) : (shape?.arc as number) ?? 360,
-      emitFrom: parseEmitFrom(shape?.emitFrom)
-    },
+      arcMode: ((shape?.arcMode as number) ?? 0) as ShapeModuleConfig['arcMode'],
+      arcSpread: (shape?.arcSpread as number) ?? 0,
+      arcSpeed: curve(shape?.arcSpeed),
+      alignToDirection: Boolean(shape?.alignToDirection ?? false),
+      randomDirectionAmount: (shape?.randomDirectionAmount as number) ?? 0,
+      sphericalDirectionAmount: (shape?.sphericalDirectionAmount as number) ?? 0,
+      randomPositionAmount: (shape?.randomPositionAmount as number) ?? 0,
+      boxThickness: readShapeVec3(shape?.boxThickness, [0, 0, 0]),
+      position: readShapeVec3(shape?._position ?? shape?.position, [0, 0, 0]),
+      rotation: readShapeVec3(shape?._rotation ?? shape?.rotation, [0, 0, 0]),
+      scale: readShapeVec3(shape?._scale ?? shape?.scale, [1, 1, 1])
+    }),
     colorOverLifetime: {
       enabled: (colorOL?._enable ?? colorOL?.enable ?? false) as boolean,
       color: parseGradientFromPrefab(prefabArray, colorOL?.color)
@@ -219,10 +234,14 @@ export function parseParticleSystemConfig(
       enabled: (texAnim?._enable ?? texAnim?.enable ?? false) as boolean,
       numTilesX: Number(texAnim?.numTilesX ?? texAnim?._numTilesX ?? 1),
       numTilesY: Number(texAnim?.numTilesY ?? texAnim?._numTilesY ?? 1),
-      animation: (texAnim?.animation as number) ?? 0,
+      animation: Number(texAnim?.animation ?? texAnim?._mode ?? 0),
       frameOverTime: parseCurveFromPool(prefabArray, texAnim?.frameOverTime),
-      startFrame: curve(texAnim?.startFrame).constant ?? 0,
-      rowIndex: (texAnim?.rowIndex as number) ?? 0
+      startFrame: curve(texAnim?.startFrame),
+      cycleCount: Number(texAnim?.cycleCount ?? 1),
+      flipU: Boolean(Number(texAnim?._flipU ?? texAnim?.flipU ?? 0)),
+      flipV: Boolean(Number(texAnim?._flipV ?? texAnim?.flipV ?? 0)),
+      randomRow: Boolean(texAnim?.randomRow ?? false),
+      rowIndex: Number(texAnim?.rowIndex ?? 0)
     },
     rendererModule: {
       renderMode: parseRenderMode(renderer?._renderMode ?? renderer?.renderMode),

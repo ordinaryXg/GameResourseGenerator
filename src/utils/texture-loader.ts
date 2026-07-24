@@ -5,6 +5,17 @@ import { resolveAssetUrl } from '@/utils/asset-resolver';
 const textureCache = new Map<string, THREE.Texture>();
 const loadingPromises = new Map<string, Promise<THREE.Texture>>;
 
+/** Match Cocos texture import defaults: linear sampling, no mipmaps (critical for sprite sheets). */
+export function configureParticleTexture(texture: THREE.Texture): void {
+  texture.generateMipmaps = false;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.anisotropy = 1;
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.needsUpdate = true;
+}
+
 export function getCachedParticleTexture(assetId: string): THREE.Texture | null {
   return textureCache.get(assetId) ?? null;
 }
@@ -27,7 +38,7 @@ export function loadParticleTexture(
       url,
       (tex) => {
         tex.colorSpace = THREE.SRGBColorSpace;
-        tex.needsUpdate = true;
+        configureParticleTexture(tex);
         textureCache.set(assetId, tex);
         loadingPromises.delete(assetId);
         resolve(tex);
@@ -68,5 +79,6 @@ export function createFallbackParticleTexture(): THREE.Texture {
   ctx.fillRect(0, 0, 32, 32);
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
+  configureParticleTexture(tex);
   return tex;
 }

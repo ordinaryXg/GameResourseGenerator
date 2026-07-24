@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { BaseParticlePreview } from './base-particle-preview';
 import type { Particle3DConfig } from '@/types/effect';
+import { computeParticleScale } from '@/utils/particle-size';
 
 export class Particle2DPreview extends BaseParticlePreview {
   private camera: THREE.OrthographicCamera;

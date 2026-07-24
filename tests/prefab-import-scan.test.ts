@@ -156,5 +156,16 @@ describe('smok fixture integration', () => {
     expect(cfg.textureAnimation.enabled).toBe(true);
     expect(cfg.textureAnimation.numTilesX).toBe(4);
     expect(cfg.textureAnimation.numTilesY).toBe(4);
+    expect(cfg.textureAnimation.cycleCount).toBe(1);
+    expect(cfg.textureAnimation.startFrame.constant).toBe(0);
+    expect(cfg.textureAnimation.randomRow).toBe(false);
+
+    const shape = (emitters[0] as import('../src/types/project').ParticleEmitterNode).config.shapeModule;
+    expect(shape.shapeType).toBe('cone');
+    expect(shape.emitFrom).toBe('shell');
+    expect(shape.radius).toBeCloseTo(0.1);
+    expect(shape.radiusThickness).toBe(1);
+    expect(shape.length).toBeCloseTo(0.087);
+    expect(shape.arc).toBeCloseTo(360);
   });
 });

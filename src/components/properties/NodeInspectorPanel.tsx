@@ -1,4 +1,5 @@
 ﻿import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { coerceRangeValue } from '@/utils/particle-size';
 import { useProjectStore } from '@/stores/project-store';
 import { useAppStore } from '@/stores/app-store';
 import type { Particle3DConfig, RangeValue, ShapeType, RenderMode, BurstConfig } from '@/types/effect';
@@ -307,10 +308,100 @@ export const NodeInspectorPanel: React.FC = () => {
             <option value="circle">圆形 (Circle)</option>
           </select>
         </div>
-        <RangeInput label="半径" value={{ mode: 'constant', constant: config.shapeModule.radius }}
+        <div style={{ marginBottom: 6 }}>
+          <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>发射位置 (Emit From)</label>
+          <select
+            value={config.shapeModule.emitFrom}
+            onChange={(e) => updateModule('shapeModule', { emitFrom: e.target.value })}
+            style={{ width: '100%', padding: '4px 8px', fontSize: 12 }}
+          >
+            <option value="base">底面 (Base)</option>
+            <option value="edge">边缘 (Edge)</option>
+            <option value="shell">外壳 (Shell)</option>
+            <option value="volume">体积 (Volume)</option>
+          </select>
+        </div>
+        <RangeInput label="半径 (Radius)" value={{ mode: 'constant', constant: config.shapeModule.radius }}
           onChange={(v) => updateModule('shapeModule', { radius: v.constant ?? 1 })} min={0.01} max={100} />
-        <RangeInput label="角度" value={{ mode: 'constant', constant: config.shapeModule.angle }}
-          onChange={(v) => updateModule('shapeModule', { angle: v.constant ?? 25 })} min={0} max={90} />
+        <RangeInput label="半径厚度 (Radius Thickness)" value={{ mode: 'constant', constant: config.shapeModule.radiusThickness ?? 1 }}
+          onChange={(v) => updateModule('shapeModule', { radiusThickness: v.constant ?? 1 })} min={0} max={1} step={0.01} />
+        {(config.shapeModule.shapeType === 'cone') && (
+          <>
+            <RangeInput label="张角 (Angle)" value={{ mode: 'constant', constant: config.shapeModule.angle }}
+              onChange={(v) => updateModule('shapeModule', { angle: v.constant ?? 25 })} min={0} max={90} />
+            <RangeInput label="长度 (Length)" value={{ mode: 'constant', constant: config.shapeModule.length ?? 0 }}
+              onChange={(v) => updateModule('shapeModule', { length: v.constant ?? 0 })} min={0} max={100} step={0.01} />
+          </>
+        )}
+        {(config.shapeModule.shapeType === 'circle' || config.shapeModule.shapeType === 'cone') && (
+          <>
+            <RangeInput label="扇形角度 (Arc)" value={{ mode: 'constant', constant: config.shapeModule.arc }}
+              onChange={(v) => updateModule('shapeModule', { arc: v.constant ?? 360 })} min={0} max={360} />
+            <div style={{ marginBottom: 6 }}>
+              <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>扇形模式 (Arc Mode)</label>
+              <select
+                value={config.shapeModule.arcMode ?? 0}
+                onChange={(e) => updateModule('shapeModule', { arcMode: parseInt(e.target.value, 10) as 0 | 1 | 2 })}
+                style={{ width: '100%', padding: '4px 8px', fontSize: 12 }}
+              >
+                <option value={0}>随机 (Random)</option>
+                <option value={1}>循环 (Loop)</option>
+                <option value={2}>往返 (PingPong)</option>
+              </select>
+            </div>
+            <RangeInput label="扇形间隔 (Arc Spread)" value={{ mode: 'constant', constant: config.shapeModule.arcSpread ?? 0 }}
+              onChange={(v) => updateModule('shapeModule', { arcSpread: v.constant ?? 0 })} min={0} max={1} step={0.01} />
+            <RangeInput label="扇形速度 (Arc Speed)" value={coerceRangeValue(config.shapeModule.arcSpeed)}
+              onChange={(v) => updateModule('shapeModule', { arcSpeed: v })} min={0} max={10} />
+          </>
+        )}
+        {config.shapeModule.shapeType === 'box' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 6 }}>
+            {(['X', 'Y', 'Z'] as const).map((axis, i) => (
+              <div key={axis}>
+                <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>盒厚度 {axis}</label>
+                <input type="number" value={config.shapeModule.boxThickness?.[i] ?? 0}
+                  onChange={(e) => {
+                    const next = [...(config.shapeModule.boxThickness ?? [0, 0, 0])] as [number, number, number];
+                    next[i] = parseFloat(e.target.value) || 0;
+                    updateModule('shapeModule', { boxThickness: next });
+                  }}
+                  min={0} step={0.01} style={{ width: '100%', padding: '4px 8px', fontSize: 12 }} />
+              </div>
+            ))}
+          </div>
+        )}
+        <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+          <input type="checkbox" checked={config.shapeModule.alignToDirection ?? false}
+            onChange={(e) => updateModule('shapeModule', { alignToDirection: e.target.checked })} />
+          对齐方向 (Align To Direction)
+        </label>
+        <RangeInput label="随机方向量 (Random Direction)" value={{ mode: 'constant', constant: config.shapeModule.randomDirectionAmount ?? 0 }}
+          onChange={(v) => updateModule('shapeModule', { randomDirectionAmount: v.constant ?? 0 })} min={0} max={1} step={0.01} />
+        <RangeInput label="球形方向量 (Spherical Direction)" value={{ mode: 'constant', constant: config.shapeModule.sphericalDirectionAmount ?? 0 }}
+          onChange={(v) => updateModule('shapeModule', { sphericalDirectionAmount: v.constant ?? 0 })} min={0} max={1} step={0.01} />
+        <RangeInput label="随机位置量 (Random Position)" value={{ mode: 'constant', constant: config.shapeModule.randomPositionAmount ?? 0 }}
+          onChange={(v) => updateModule('shapeModule', { randomPositionAmount: v.constant ?? 0 })} min={0} max={10} step={0.01} />
+        <div style={{ fontSize: 11, color: 'var(--text-secondary)', margin: '8px 0 4px' }}>形状变换 (Position / Rotation / Scale)</div>
+        {(['position', 'rotation', 'scale'] as const).map((field) => (
+          <div key={field} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 6 }}>
+            {(['X', 'Y', 'Z'] as const).map((axis, i) => (
+              <div key={`${field}-${axis}`}>
+                <label style={{ fontSize: 10, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>
+                  {field === 'position' ? '位置' : field === 'rotation' ? '旋转' : '缩放'} {axis}
+                </label>
+                <input type="number" value={config.shapeModule[field]?.[i] ?? (field === 'scale' ? 1 : 0)}
+                  onChange={(e) => {
+                    const next = [...(config.shapeModule[field] ?? (field === 'scale' ? [1, 1, 1] : [0, 0, 0]))] as [number, number, number];
+                    next[i] = parseFloat(e.target.value) || 0;
+                    updateModule('shapeModule', { [field]: next });
+                  }}
+                  step={field === 'rotation' ? 1 : 0.01}
+                  style={{ width: '100%', padding: '4px 6px', fontSize: 12 }} />
+              </div>
+            ))}
+          </div>
+        ))}
       </Section>
 
       <Section
@@ -420,16 +511,88 @@ export const NodeInspectorPanel: React.FC = () => {
         highlighted={isHighlighted('textureAnimation')}
       >
         <div style={{ marginBottom: 6 }}>
-          <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>横向分块数</label>
-          <input type="number" value={config.textureAnimation.numTilesX}
-            onChange={(e) => updateModule('textureAnimation', { numTilesX: parseInt(e.target.value) || 1 })}
-            min={1} max={16} style={{ width: '100%', padding: '4px 8px', fontSize: 12 }} />
+          <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>动画模式</label>
+          <select
+            value={config.textureAnimation.animation}
+            onChange={(e) => updateModule('textureAnimation', { animation: parseInt(e.target.value, 10) || 0 })}
+            style={{ width: '100%', padding: '4px 8px', fontSize: 12 }}
+          >
+            <option value={0}>整图 (Grid / Whole Sheet)</option>
+            <option value={1}>单行 (Single Row)</option>
+          </select>
         </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 6 }}>
+          <div>
+            <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>横向分块 (Tiles X)</label>
+            <input type="number" value={config.textureAnimation.numTilesX}
+              onChange={(e) => updateModule('textureAnimation', { numTilesX: parseInt(e.target.value, 10) || 1 })}
+              min={1} max={64} style={{ width: '100%', padding: '4px 8px', fontSize: 12 }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>纵向分块 (Tiles Y)</label>
+            <input type="number" value={config.textureAnimation.numTilesY}
+              onChange={(e) => updateModule('textureAnimation', { numTilesY: parseInt(e.target.value, 10) || 1 })}
+              min={1} max={64} style={{ width: '100%', padding: '4px 8px', fontSize: 12 }} />
+          </div>
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>帧随生命周期 (Frame Over Time)</div>
+        <CurveEditor
+          value={config.textureAnimation.frameOverTime}
+          onChange={(v) => updateModule('textureAnimation', { frameOverTime: v })}
+          min={0}
+          max={1}
+        />
+        <RangeInput
+          label="起始帧 (Start Frame)"
+          value={coerceRangeValue(config.textureAnimation.startFrame)}
+          onChange={(v) => updateModule('textureAnimation', { startFrame: v })}
+          min={0}
+          max={config.textureAnimation.numTilesX * config.textureAnimation.numTilesY}
+        />
         <div style={{ marginBottom: 6 }}>
-          <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>纵向分块数</label>
-          <input type="number" value={config.textureAnimation.numTilesY}
-            onChange={(e) => updateModule('textureAnimation', { numTilesY: parseInt(e.target.value) || 1 })}
-            min={1} max={16} style={{ width: '100%', padding: '4px 8px', fontSize: 12 }} />
+          <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>循环次数 (Cycle Count)</label>
+          <input type="number" value={config.textureAnimation.cycleCount}
+            onChange={(e) => updateModule('textureAnimation', { cycleCount: Math.max(1, parseInt(e.target.value, 10) || 1) })}
+            min={1} max={64} style={{ width: '100%', padding: '4px 8px', fontSize: 12 }} />
+        </div>
+        {config.textureAnimation.animation === 1 && (
+          <>
+            <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={config.textureAnimation.randomRow}
+                onChange={(e) => updateModule('textureAnimation', { randomRow: e.target.checked })}
+              />
+              随机行 (Random Row)
+            </label>
+            {!config.textureAnimation.randomRow && (
+              <div style={{ marginBottom: 6 }}>
+                <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>行索引 (Row Index)</label>
+                <input type="number" value={config.textureAnimation.rowIndex}
+                  onChange={(e) => updateModule('textureAnimation', { rowIndex: parseInt(e.target.value, 10) || 0 })}
+                  min={0} max={Math.max(0, config.textureAnimation.numTilesY - 1)}
+                  style={{ width: '100%', padding: '4px 8px', fontSize: 12 }} />
+              </div>
+            )}
+          </>
+        )}
+        <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
+          <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={config.textureAnimation.flipU}
+              onChange={(e) => updateModule('textureAnimation', { flipU: e.target.checked })}
+            />
+            翻转 U
+          </label>
+          <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={config.textureAnimation.flipV}
+              onChange={(e) => updateModule('textureAnimation', { flipV: e.target.checked })}
+            />
+            翻转 V
+          </label>
         </div>
       </Section>
 

@@ -22,9 +22,9 @@ export const DEFAULT_PROPERTIES_PANEL_WIDTH = 320;
 export function migratePanelSizes(parsed: Partial<{ left: number; right: number; preview: number; assets: number }>) {
   const right = parsed.right === 280 ? DEFAULT_PROPERTIES_PANEL_WIDTH : (parsed.right ?? DEFAULT_PROPERTIES_PANEL_WIDTH);
   return {
-    left: parsed.left ?? 300,
-    right,
-    preview: parsed.preview ?? 280,
-    assets: parsed.assets ?? 180
+    left: Math.max(200, parsed.left ?? 300),
+    right: Math.max(200, right),
+    preview: Math.max(120, parsed.preview ?? 280),
+    assets: Math.max(100, parsed.assets ?? 180)
   };
 }

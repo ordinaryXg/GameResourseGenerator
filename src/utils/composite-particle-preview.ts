@@ -15,10 +15,14 @@ import {
 import { resolveParticleBlending } from '@/utils/material-blend';
 import {
   cloneTextureForSheet,
+  sampleTextureSheetContext,
   updateParticleTextureSheet,
-  usesTextureSheet
+  usesTextureSheet,
+  type TextureSheetFrameContext
 } from '@/utils/texture-sheet';
 import { computeParticleScale, sampleStartParticleSize } from '@/utils/particle-size';
+import { sampleEmitMotion } from '@/utils/particle-shape';
+import { normalizeParticle3DConfig } from '@/utils/particle-config-normalize';
 import { syncEmitterGizmoGroup, type EmitterGizmoInput } from '@/utils/emitter-gizmo';
 
 interface TaggedParticle {
@@ -35,6 +39,7 @@ interface TaggedParticle {
   sprite: THREE.Sprite;
   material: THREE.SpriteMaterial;
   ownedTexture: THREE.Texture | null;
+  sheetContext: TextureSheetFrameContext | null;
 }
 
 function disposeTaggedParticleMaterial(p: TaggedParticle) {
@@ -95,7 +100,7 @@ export class CompositeParticlePreview extends ParticlePreview {
       id: s.id,
       name: s.name,
       enabled: s.enabled,
-      config: JSON.parse(JSON.stringify(s.config)),
+      config: normalizeParticle3DConfig(JSON.parse(JSON.stringify(s.config))),
       transform: {
         position: [...s.transform.position] as [number, number, number],
         rotation: [...s.transform.rotation] as [number, number, number],
@@ -253,7 +258,12 @@ export class CompositeParticlePreview extends ParticlePreview {
       p.material.color.setRGB(rgba[0], rgba[1], rgba[2]);
       p.material.opacity = rgba[3];
       if (p.ownedTexture && usesTextureSheet(cfg.textureAnimation)) {
-        updateParticleTextureSheet(p.ownedTexture, cfg.textureAnimation, p.life);
+        updateParticleTextureSheet(
+          p.ownedTexture,
+          cfg.textureAnimation,
+          p.life,
+          p.sheetContext ?? undefined
+        );
       }
       const size = computeParticleScale(cfg, p.startSize, p.life, p.transform);
       p.sprite.scale.setScalar(size);
@@ -306,8 +316,8 @@ export class CompositeParticlePreview extends ParticlePreview {
     const cfg = source.config;
     const transform = source.transform;
 
-    const localPos = this.getEmitPosition(cfg);
-    const localVel = this.getEmitVelocity(cfg);
+    const speed = this.getValueFromRange(cfg.mainModule.startSpeed);
+    const { position: localPos, velocity: localVel } = sampleEmitMotion(cfg, speed);
     const pos = applyTransformToPoint(transform, localPos);
     const vel = applyTransformToDirection(transform, localVel);
 
@@ -324,11 +334,18 @@ export class CompositeParticlePreview extends ParticlePreview {
 
     const texture = this.getParticleTexture(source);
     let ownedTexture: THREE.Texture | null = null;
+    let sheetContext: TextureSheetFrameContext | null = null;
     let mapTexture = texture;
     if (usesTextureSheet(cfg.textureAnimation)) {
       ownedTexture = cloneTextureForSheet(texture);
       mapTexture = ownedTexture;
-      updateParticleTextureSheet(ownedTexture, cfg.textureAnimation, 0);
+      sheetContext = sampleTextureSheetContext(cfg.textureAnimation);
+      updateParticleTextureSheet(
+        ownedTexture,
+        cfg.textureAnimation,
+        0,
+        sheetContext
+      );
     }
     const blending = this.assetContext
       ? resolveParticleBlending(
@@ -364,7 +381,8 @@ export class CompositeParticlePreview extends ParticlePreview {
       elapsed: 0,
       sprite,
       material,
-      ownedTexture
+      ownedTexture,
+      sheetContext
     });
   }
 

@@ -1,7 +1,8 @@
 import type { EffectConfig, ChatMessage } from '@/types/effect';
 import type { EffectProject, ParticleEmitterNode } from '@/types/project';
 import { FX_PROJECT_VERSION } from '@/types/project';
-import { cloneProject, touchProjectMetadata } from './project-tree';
+import { cloneProject, touchProjectMetadata, walkEmitters } from './project-tree';
+import { normalizeParticle3DConfig } from './particle-config-normalize';
 
 export function serializeProject(project: EffectProject): string {
   return JSON.stringify(project, null, 2);
@@ -35,6 +36,9 @@ function normalizeProject(raw: unknown): EffectProject {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
+  walkEmitters(project.root, (emitter) => {
+    emitter.config = normalizeParticle3DConfig(emitter.config);
+  });
   return project;
 }
 

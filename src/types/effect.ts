@@ -6,7 +6,8 @@
 export type EffectType = 'particle3d' | 'particle2d' | 'shader' | 'animation';
 
 export type ShapeType = 'box' | 'sphere' | 'hemisphere' | 'cone' | 'circle';
-export type EmitFrom = 'volume' | 'shell' | 'edge';
+export type EmitFrom = 'base' | 'edge' | 'shell' | 'volume';
+export type ShapeArcMode = 0 | 1 | 2;
 export type RenderMode = 'billboard' | 'stretchedBillboard' | 'horizontalBillboard' | 'verticalBillboard' | 'mesh';
 export type AlignmentSpace = 'view' | 'world' | 'local';
 
@@ -85,10 +86,23 @@ export interface MainModuleConfig {
 export interface ShapeModuleConfig {
   enabled: boolean;
   shapeType: ShapeType;
-  radius: number;
-  angle: number;
-  arc: number;
   emitFrom: EmitFrom;
+  radius: number;
+  radiusThickness: number;
+  angle: number;
+  length: number;
+  arc: number;
+  arcMode: ShapeArcMode;
+  arcSpread: number;
+  arcSpeed: RangeValue;
+  alignToDirection: boolean;
+  randomDirectionAmount: number;
+  sphericalDirectionAmount: number;
+  randomPositionAmount: number;
+  boxThickness: [number, number, number];
+  position: [number, number, number];
+  rotation: [number, number, number];
+  scale: [number, number, number];
 }
 
 export interface ColorOverLifetimeConfig {
@@ -133,12 +147,19 @@ export interface TextureAnimationConfig {
   enabled: boolean;
   numTilesX: number;
   numTilesY: number;
+  /** 0 = 整图 (Grid)，1 = 单行 (Single Row) */
   animation: number;
   frameOverTime: CurveConfig;
-  /** Initial frame offset (Cocos startFrame constant). */
-  startFrame?: number;
-  /** Row index for single-row animation mode. */
-  rowIndex?: number;
+  /** 起始帧偏移（Cocos startFrame） */
+  startFrame: RangeValue;
+  /** 粒子生命周期内动画循环次数 */
+  cycleCount: number;
+  flipU: boolean;
+  flipV: boolean;
+  /** 单行模式下随机选择行 */
+  randomRow: boolean;
+  /** 单行模式下的行索引（0 = 顶行） */
+  rowIndex: number;
 }
 
 export interface RendererConfig {

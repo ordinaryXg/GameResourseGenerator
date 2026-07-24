@@ -20,7 +20,7 @@ export const SHAPE_TYPE: Record<ShapeType, number> = {
 };
 
 export const EMIT_FROM: Record<EmitFrom, number> = {
-  edge: 1, shell: 2, volume: 3
+  base: 0, edge: 1, shell: 2, volume: 3
 };
 
 export const RENDER_MODE: Record<RenderMode, number> = {
@@ -54,6 +54,11 @@ export const ALIGN_SPACE_REV = Object.fromEntries(
 ) as Record<number, import('@/types/effect').AlignmentSpace>;
 
 const DEG2RAD = Math.PI / 180;
+
+function coneLengthFromAngle(radius: number, angleDeg: number): number {
+  const angleRad = (angleDeg * Math.PI) / 180;
+  return angleRad > 0.001 ? radius / Math.tan(angleRad) : radius * 2;
+}
 
 export function toCocosColor(r: number, g: number, b: number, a: number) {
   return {
@@ -403,27 +408,47 @@ export class CocosPrefabBuilder {
       color: this.ref(colorOLColorIdx)
     });
 
-    const arcSpeedIdx = this.addConstantCurve(1);
+    const arcSpeedIdx = this.addConstantCurve(shape.arcSpeed);
     const shapeIdx = this.push({
       __type__: 'cc.ShapeModule',
       _enable: shape.enabled,
       _shapeType: SHAPE_TYPE[shape.shapeType] ?? 2,
       shapeType: SHAPE_TYPE[shape.shapeType] ?? 2,
       emitFrom: EMIT_FROM[shape.emitFrom] ?? 3,
-      alignToDirection: false,
-      randomDirectionAmount: 0,
-      sphericalDirectionAmount: 0,
-      randomPositionAmount: 0,
+      alignToDirection: shape.alignToDirection,
+      randomDirectionAmount: shape.randomDirectionAmount,
+      sphericalDirectionAmount: shape.sphericalDirectionAmount,
+      randomPositionAmount: shape.randomPositionAmount,
       radius: shape.radius,
-      radiusThickness: 1,
-      arcMode: 0,
-      arcSpread: 0,
+      radiusThickness: shape.radiusThickness,
+      arcMode: shape.arcMode,
+      arcSpread: shape.arcSpread,
       arcSpeed: this.ref(arcSpeedIdx),
-      length: 5,
-      boxThickness: { __type__: 'cc.Vec3', x: 0, y: 0, z: 0 },
-      _position: { __type__: 'cc.Vec3', x: 0, y: 0, z: 0 },
-      _rotation: { __type__: 'cc.Vec3', x: 0, y: 0, z: 0 },
-      _scale: { __type__: 'cc.Vec3', x: 1, y: 1, z: 1 },
+      length: shape.length > 0 ? shape.length : coneLengthFromAngle(shape.radius, shape.angle),
+      boxThickness: {
+        __type__: 'cc.Vec3',
+        x: shape.boxThickness[0],
+        y: shape.boxThickness[1],
+        z: shape.boxThickness[2]
+      },
+      _position: {
+        __type__: 'cc.Vec3',
+        x: shape.position[0],
+        y: shape.position[1],
+        z: shape.position[2]
+      },
+      _rotation: {
+        __type__: 'cc.Vec3',
+        x: shape.rotation[0],
+        y: shape.rotation[1],
+        z: shape.rotation[2]
+      },
+      _scale: {
+        __type__: 'cc.Vec3',
+        x: shape.scale[0],
+        y: shape.scale[1],
+        z: shape.scale[2]
+      },
       _arc: (shape.arc ?? 360) * DEG2RAD,
       _angle: (shape.angle ?? 25) * DEG2RAD
     });
@@ -509,7 +534,7 @@ export class CocosPrefabBuilder {
     const texFrameIdx = config.textureAnimation.enabled
       ? this.addAnimCurve(config.textureAnimation.frameOverTime)
       : this.addConstantCurve(0);
-    const texStartIdx = this.addConstantCurve(0);
+    const texStartIdx = this.addConstantCurve(config.textureAnimation.startFrame);
     const texAnimIdx = this.push({
       __type__: 'cc.TextureAnimationModule',
       _enable: config.textureAnimation.enabled,
@@ -517,16 +542,16 @@ export class CocosPrefabBuilder {
       numTilesX: config.textureAnimation.numTilesX,
       _numTilesY: config.textureAnimation.numTilesY,
       numTilesY: config.textureAnimation.numTilesY,
-      _mode: 0,
+      _mode: config.textureAnimation.animation,
       animation: config.textureAnimation.animation,
       frameOverTime: this.ref(texFrameIdx),
       startFrame: this.ref(texStartIdx),
-      cycleCount: 1,
-      _flipU: 0,
-      _flipV: 0,
+      cycleCount: config.textureAnimation.cycleCount,
+      _flipU: config.textureAnimation.flipU ? 1 : 0,
+      _flipV: config.textureAnimation.flipV ? 1 : 0,
       _uvChannelMask: -1,
-      randomRow: false,
-      rowIndex: 0
+      randomRow: config.textureAnimation.randomRow,
+      rowIndex: config.textureAnimation.rowIndex
     });
 
     const trailLifeIdx = this.addConstantCurve(config.trailModule.lifetime);

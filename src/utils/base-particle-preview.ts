@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import type { Particle3DConfig, RangeValue } from '@/types/effect';
 import { composeParticleColor, sampleStartColor } from '@/utils/gradient-utils';
-import { disposeSpriteMaterial } from '@/utils/texture-loader';
+import { configureParticleTexture, disposeSpriteMaterial } from '@/utils/texture-loader';
 import { computeParticleScale, sampleStartParticleSize } from '@/utils/particle-size';
+import { sampleEmitMotion } from '@/utils/particle-shape';
 
 export interface AxisScreenVector {
   id: 'x' | 'y' | 'z';
@@ -62,9 +63,26 @@ export abstract class BaseParticlePreview {
   }
 
   protected initRenderer() {
-    if (this.renderer) return;
+    if (this.renderer) {
+      const gl = this.renderer.getContext();
+      if (!gl.isContextLost()) return;
+      this.renderer.dispose();
+      this.renderer = null;
+    }
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.applyRendererSize();
+  }
+
+  protected getPreviewPixelRatio(): number {
+    return window.devicePixelRatio || 1;
+  }
+
+  protected applyRendererSize(): void {
+    if (!this.container || !this.renderer) return;
+    const { width, height } = this.container.getBoundingClientRect();
+    if (width === 0 || height === 0) return;
+    this.renderer.setPixelRatio(this.getPreviewPixelRatio());
+    this.renderer.setSize(width, height);
   }
 
   mount(container: HTMLElement) {
@@ -76,6 +94,7 @@ export abstract class BaseParticlePreview {
     canvas.style.display = 'block';
     container.appendChild(canvas);
     this.resize();
+    requestAnimationFrame(() => this.resize());
     this.start();
     this.observeResize(container);
   }
@@ -92,17 +111,18 @@ export abstract class BaseParticlePreview {
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     this.stop();
-    if (this.renderer?.domElement.parentElement === this.container) {
-      this.container?.removeChild(this.renderer.domElement);
+    if (this.renderer) {
+      if (this.renderer.domElement.parentElement === this.container) {
+        this.container?.removeChild(this.renderer.domElement);
+      }
+      this.renderer.dispose();
+      this.renderer = null;
     }
     this.container = null;
   }
 
   resize() {
-    if (!this.container || !this.renderer) return;
-    const { width, height } = this.container.getBoundingClientRect();
-    if (width === 0 || height === 0) return;
-    this.renderer.setSize(width, height);
+    this.applyRendererSize();
   }
 
   setConfig(config: Particle3DConfig) {
@@ -117,9 +137,9 @@ export abstract class BaseParticlePreview {
   reset() { this.resetSimulation(); this.isPlaying = true; }
 
   // Mouse interaction (overridable)
-  onMouseDown(_x: number, _y: number) {}
+  onMouseDown(_x: number, _y: number, _button = 0) {}
   onMouseMove(_x: number, _y: number) {}
-  onMouseUp() {}
+  onMouseUp(_button?: number) {}
   onWheel(_deltaY: number) {}
 
   /** World axis directions projected to screen space for orientation gizmo. */
@@ -156,8 +176,12 @@ export abstract class BaseParticlePreview {
     this.fpsLastTime = performance.now();
     const animate = () => {
       this.animationId = requestAnimationFrame(animate);
-      if (this.isPlaying && this.canSimulate()) this.update(0.016);
-      this.renderer!.render(this.scene, this.getCamera());
+      try {
+        if (this.isPlaying && this.canSimulate()) this.update(0.016);
+        this.renderer!.render(this.scene, this.getCamera());
+      } catch (err) {
+        console.error('[Preview] render loop error:', err);
+      }
       this.fpsFrameCount += 1;
       const now = performance.now();
       if (now - this.fpsLastTime >= 500) {
@@ -250,8 +274,8 @@ export abstract class BaseParticlePreview {
 
   protected emitParticle(cfg: Particle3DConfig) {
     if (this.particles.length >= this.maxParticles) return;
-    const pos = this.getEmitPosition(cfg);
-    const vel = this.getEmitVelocity(cfg);
+    const speed = this.getValueFromRange(cfg.mainModule.startSpeed);
+    const { position: pos, velocity: vel } = sampleEmitMotion(cfg, speed);
     const lifetime = this.getValueFromRange(cfg.mainModule.startLifetime);
     const startSize = sampleStartParticleSize(cfg);
     const size = computeParticleScale(cfg, startSize, 0);
@@ -270,6 +294,7 @@ export abstract class BaseParticlePreview {
     ctx.fillStyle = g; ctx.fillRect(0,0,32,32);
 
     const texture = new THREE.CanvasTexture(canvas);
+    configureParticleTexture(texture);
     const useAdditive = cfg.rendererModule.renderMode !== 'billboard';
     const material = new THREE.SpriteMaterial({
       map: texture,

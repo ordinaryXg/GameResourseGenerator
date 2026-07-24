@@ -59,10 +59,23 @@ export function getDefaultParticle3DConfig(): Particle3DConfig {
     shapeModule: {
       enabled: true,
       shapeType: 'cone',
+      emitFrom: 'volume',
       radius: 1,
+      radiusThickness: 1,
       angle: 25,
+      length: 0,
       arc: 360,
-      emitFrom: 'volume'
+      arcMode: 0,
+      arcSpread: 0,
+      arcSpeed: defaultRange(1),
+      alignToDirection: false,
+      randomDirectionAmount: 0,
+      sphericalDirectionAmount: 0,
+      randomPositionAmount: 0,
+      boxThickness: [0, 0, 0],
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1]
     },
     colorOverLifetime: {
       enabled: true,
@@ -105,7 +118,11 @@ export function getDefaultParticle3DConfig(): Particle3DConfig {
       numTilesY: 1,
       animation: 0,
       frameOverTime: defaultCurve([0, 0], [1, 1]),
-      startFrame: 0,
+      startFrame: defaultRange(0),
+      cycleCount: 1,
+      flipU: false,
+      flipV: false,
+      randomRow: false,
       rowIndex: 0
     },
     rendererModule: {

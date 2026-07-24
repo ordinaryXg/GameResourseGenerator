@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { Particle3DConfig, RangeValue, ShapeModuleConfig } from '@/types/effect';
 import type { Transform3D } from '@/types/project';
 import { transformToMatrix } from '@/utils/transform-utils';
+import { coneAxisLength, coneTopRadius } from '@/utils/particle-shape';
 
 export interface EmitterGizmoInput {
   id: string;
@@ -74,6 +75,24 @@ function createCircleOutline(radius: number, color: number, opacity: number, seg
   return new THREE.Line(geo, mat);
 }
 
+/** Circle on the XY plane at z (Cocos cone base lives on XY, z=0). */
+function createCircleOutlineXY(
+  radius: number,
+  z: number,
+  color: number,
+  opacity: number,
+  segments = 48
+): THREE.Line {
+  const points: THREE.Vector3[] = [];
+  for (let i = 0; i <= segments; i++) {
+    const t = (i / segments) * Math.PI * 2;
+    points.push(new THREE.Vector3(Math.cos(t) * radius, Math.sin(t) * radius, z));
+  }
+  const geo = new THREE.BufferGeometry().setFromPoints(points);
+  const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthTest: true });
+  return new THREE.Line(geo, mat);
+}
+
 function createArcOutline(radius: number, arcDeg: number, color: number, opacity: number, segments = 32): THREE.Line {
   const arcRad = (Math.min(360, Math.max(0, arcDeg)) * Math.PI) / 180;
   const points: THREE.Vector3[] = [];
@@ -85,6 +104,50 @@ function createArcOutline(radius: number, arcDeg: number, color: number, opacity
   const geo = new THREE.BufferGeometry().setFromPoints(points);
   const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthTest: true });
   return new THREE.Line(geo, mat);
+}
+
+/** Truncated cone aligned with Cocos: base at z=0, axis toward -Z. */
+function createConeFrustumOutline(
+  shape: ShapeModuleConfig,
+  color: number,
+  opacity: number,
+  segments = 24
+): THREE.Group {
+  const radius = Math.max(0.05, shape.radius || 0.5);
+  const axisLength = coneAxisLength(shape);
+  const topRadius = coneTopRadius(shape, axisLength);
+  const group = new THREE.Group();
+
+  group.add(createCircleOutlineXY(radius, 0, color, opacity, segments));
+  if (topRadius > 0.001) {
+    group.add(createCircleOutlineXY(topRadius, -axisLength, color, opacity * 0.85, segments));
+  }
+
+  for (let i = 0; i < segments; i += Math.max(1, Math.floor(segments / 4))) {
+    const t = (i / segments) * Math.PI * 2;
+    const points = [
+      new THREE.Vector3(Math.cos(t) * radius, Math.sin(t) * radius, 0),
+      new THREE.Vector3(Math.cos(t) * topRadius, Math.sin(t) * topRadius, -axisLength)
+    ];
+    const geo = new THREE.BufferGeometry().setFromPoints(points);
+    const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: opacity * 0.9, depthTest: true });
+    group.add(new THREE.Line(geo, mat));
+  }
+
+  return group;
+}
+
+function applyShapeLocalTransform(shape: ShapeModuleConfig, obj: THREE.Object3D): void {
+  const [px, py, pz] = shape.position;
+  const [rx, ry, rz] = shape.rotation;
+  const [sx, sy, sz] = shape.scale;
+  obj.position.set(px, py, pz);
+  obj.rotation.set(
+    (rx * Math.PI) / 180,
+    (ry * Math.PI) / 180,
+    (rz * Math.PI) / 180
+  );
+  obj.scale.set(sx, sy, sz);
 }
 
 function createShapeOutline(shape: ShapeModuleConfig, color: number, opacity: number): THREE.Object3D | null {
@@ -105,13 +168,9 @@ function createShapeOutline(shape: ShapeModuleConfig, color: number, opacity: nu
       ));
       group.add(createCircleOutline(radius, color, opacity * 0.7));
       break;
-    case 'cone': {
-      const halfAngle = ((shape.angle || 25) * Math.PI) / 360;
-      const height = halfAngle > 0.01 ? radius / Math.tan(halfAngle) : radius * 2;
-      group.add(wireframeFromGeometry(new THREE.ConeGeometry(radius, height, 16, 1, true), color, opacity));
-      group.add(createCircleOutline(radius, color, opacity * 0.85));
+    case 'cone':
+      group.add(createConeFrustumOutline(shape, color, opacity));
       break;
-    }
     case 'box':
       group.add(wireframeFromGeometry(new THREE.BoxGeometry(radius * 2, radius * 2, radius * 2), color, opacity));
       break;
@@ -127,12 +186,17 @@ function createShapeOutline(shape: ShapeModuleConfig, color: number, opacity: nu
       break;
   }
 
+  applyShapeLocalTransform(shape, group);
   return group;
 }
 
-function createDirectionArrow(length: number, color: number, opacity: number): THREE.ArrowHelper {
-  const dir = new THREE.Vector3(0, 1, 0);
-  const arrow = new THREE.ArrowHelper(dir, new THREE.Vector3(0, 0, 0), length, color, length * 0.2, length * 0.12);
+function createDirectionArrow(
+  length: number,
+  color: number,
+  opacity: number,
+  direction = new THREE.Vector3(0, 0, -1)
+): THREE.ArrowHelper {
+  const arrow = new THREE.ArrowHelper(direction, new THREE.Vector3(0, 0, 0), length, color, length * 0.2, length * 0.12);
   arrow.line.material = new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthTest: true });
   arrow.cone.material = new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthTest: true });
   return arrow;
@@ -184,8 +248,9 @@ export function buildEmitterGizmo(source: EmitterGizmoInput, options?: EmitterGi
   root.add(createPivotAxes(axisSize, opacity));
 
   const shape = source.config.shapeModule;
+  const axisLength = shape.shapeType === 'cone' ? coneAxisLength(shape) : 0;
   const labelOffset = shape.enabled
-    ? Math.max(0.4, shape.radius * (shape.shapeType === 'cone' ? 2 : 1.2) + 0.25)
+    ? Math.max(0.4, shape.radius * (shape.shapeType === 'cone' ? 1.6 : 1.2) + axisLength * 0.35 + 0.25)
     : 0.45;
   const label = createNameLabel(source.name, selected);
   label.position.y = labelOffset;
@@ -197,15 +262,16 @@ export function buildEmitterGizmo(source: EmitterGizmoInput, options?: EmitterGi
   if (shape.enabled) {
     const speed = avgRangeValue(source.config.mainModule.startSpeed);
     const arrowLen = Math.max(0.35, Math.min(2.5, speed * 0.25 + (shape.radius || 0.5) * 0.5));
-    let origin = new THREE.Vector3(0, 0, 0);
-    if (shape.shapeType === 'cone') {
-      const halfAngle = ((shape.angle || 25) * Math.PI) / 360;
-      const height = halfAngle > 0.01 ? shape.radius / Math.tan(halfAngle) : shape.radius * 2;
-      origin = new THREE.Vector3(0, height * 0.5, 0);
-    }
+    const arrowGroup = new THREE.Group();
     const arrow = createDirectionArrow(arrowLen, GIZMO_COLORS.direction, opacity * 0.9);
-    arrow.position.copy(origin);
-    root.add(arrow);
+    if (shape.shapeType === 'cone') {
+      arrow.position.set(0, 0, -axisLength * 0.35);
+    }
+    arrowGroup.add(arrow);
+    if (shape.shapeType === 'cone') {
+      applyShapeLocalTransform(shape, arrowGroup);
+    }
+    root.add(arrowGroup);
   }
 
   return root;
