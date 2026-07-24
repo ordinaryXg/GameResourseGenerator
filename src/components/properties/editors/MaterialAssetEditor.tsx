@@ -15,15 +15,9 @@ import {
   getMaterialDocument,
   materialDocumentMetaPatch,
   particleConfigFromDocument,
-  setDefines0,
-  setPass0,
-  setTintOnDocument
+  setPass0
 } from '@/utils/material-document';
-import {
-  techniqueLabel,
-  tintFromCssHex,
-  tintToCssHex
-} from '@/utils/particle-material';
+import { resolveEffectSchema } from '@/utils/effect-schema';
 import {
   AssetEditorHeader,
   AssetEditorSection,
@@ -33,7 +27,7 @@ import {
   monoBlockStyle
 } from '@/components/properties/editors/AssetEditorShared';
 import { AssetMetaFields } from '@/components/properties/editors/AssetMetaFields';
-import { AssetSlot } from '@/components/inspector/AssetSlot';
+import { MaterialSchemaFields } from '@/components/properties/editors/MaterialSchemaFields';
 
 interface MaterialAssetEditorProps {
   asset: AssetEntry;
@@ -50,10 +44,15 @@ function effectModeOf(doc: MaterialDocument): EffectMode {
 export const MaterialAssetEditor: React.FC<MaterialAssetEditorProps> = ({ asset }) => {
   const updateProjectAsset = useProjectStore(s => s.updateProjectAsset);
   const getMergedAssets = useAssetStore(s => s.getMergedAssets);
+  const getAssetById = useAssetStore(s => s.getAssetById);
   const { showToastMessage } = useAppStore();
   const editable = isProjectEditableAsset(asset);
   const doc = useMemo(() => getMaterialDocument(asset), [asset]);
   const config = useMemo(() => particleConfigFromDocument(doc), [doc]);
+  const schema = useMemo(
+    () => resolveEffectSchema(doc, getAssetById),
+    [doc, getAssetById]
+  );
   const shaders = useMemo(
     () => getMergedAssets().filter(a => a.type === 'shader'),
     [getMergedAssets, asset]
@@ -61,19 +60,15 @@ export const MaterialAssetEditor: React.FC<MaterialAssetEditorProps> = ({ asset 
 
   const [name, setName] = useState(asset.name);
   const [description, setDescription] = useState(asset.meta?.description ?? '');
-  const [alpha, setAlpha] = useState(config.tintColor.a);
   const [externalUuid, setExternalUuid] = useState(
     doc.effect.kind === 'external-uuid' ? doc.effect.uuid : ''
   );
-  const [defineKey, setDefineKey] = useState('');
-  const [defineValue, setDefineValue] = useState('true');
 
   useEffect(() => {
     setName(asset.name);
     setDescription(asset.meta?.description ?? '');
-    setAlpha(config.tintColor.a);
     setExternalUuid(doc.effect.kind === 'external-uuid' ? doc.effect.uuid : '');
-  }, [asset.id, asset.name, asset.meta?.description, config.tintColor.a, doc.effect]);
+  }, [asset.id, asset.name, asset.meta?.description, doc.effect]);
 
   const sourcePreview = useMemo(() => formatMaterialSourcePreview(asset), [asset]);
   const pass0: PassState = doc.states[0] ?? {
@@ -81,7 +76,6 @@ export const MaterialAssetEditor: React.FC<MaterialAssetEditorProps> = ({ asset 
     depthStencilState: { depthTest: true, depthWrite: false },
     blendState: { targets: [{ blend: true, blendSrc: 770, blendDst: 1 }] }
   };
-  const defines0 = doc.defines[0] ?? {};
   const mode = effectModeOf(doc);
 
   const commitDoc = useCallback((
@@ -232,83 +226,28 @@ export const MaterialAssetEditor: React.FC<MaterialAssetEditorProps> = ({ asset 
       </AssetEditorSection>
 
       <AssetEditorSection title="Technique">
-        <FieldLabel label="Technique Index">
-          <input
-            type="number"
-            min={0}
+        <FieldLabel label="Technique">
+          <select
+            className="select-sm"
+            style={{ width: '100%' }}
             disabled={!editable}
-            style={textInputStyle}
-            value={doc.techIdx}
+            value={Math.min(doc.techIdx, Math.max(0, schema.techniques.length - 1))}
             onChange={(e) => {
-              const techIdx = Math.max(0, parseInt(e.target.value, 10) || 0);
-              commitDoc((prev) => ({ ...prev, techIdx }), `Technique：${techniqueLabel(techIdx)}`);
+              const techIdx = parseInt(e.target.value, 10) || 0;
+              const techName = schema.techniques[techIdx]?.name ?? String(techIdx);
+              commitDoc((prev) => ({ ...prev, techIdx }), `Technique：${techName}`);
             }}
-          />
+          >
+            {schema.techniques.map((t, i) => (
+              <option key={`${t.name}-${i}`} value={i}>
+                {i} — {t.name}
+              </option>
+            ))}
+          </select>
         </FieldLabel>
-        <div style={{ fontSize: 11, color: 'var(--accent)' }}>
-          {blendModeLabel(config.blend)}（粒子 Effect 下 0=alpha / 1=additive）
-        </div>
-      </AssetEditorSection>
-
-      <AssetEditorSection title="Defines">
-        <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 6 }}>
-          `_defines[0]` 键值表（B2 将按 Effect Schema 生成）
-        </div>
-        {Object.keys(defines0).length === 0 && (
-          <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 6 }}>（空）</div>
-        )}
-        {Object.entries(defines0).map(([k, v]) => (
-          <div key={k} style={{ display: 'flex', gap: 6, marginBottom: 4, alignItems: 'center' }}>
-            <code style={{ fontSize: 10, flex: 1 }}>{k}</code>
-            <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{String(v)}</span>
-            {editable && (
-              <button
-                type="button"
-                className="btn-sm"
-                onClick={() => {
-                  commitDoc((prev) => {
-                    const next = { ...(prev.defines[0] ?? {}) };
-                    delete next[k];
-                    return setDefines0(prev, next);
-                  });
-                }}
-              >
-                删
-              </button>
-            )}
-          </div>
-        ))}
-        {editable && (
-          <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-            <input
-              style={{ ...textInputStyle, flex: 1 }}
-              placeholder="宏名"
-              value={defineKey}
-              onChange={(e) => setDefineKey(e.target.value)}
-            />
-            <input
-              style={{ ...textInputStyle, width: 72 }}
-              placeholder="值"
-              value={defineValue}
-              onChange={(e) => setDefineValue(e.target.value)}
-            />
-            <button
-              type="button"
-              className="btn-sm"
-              onClick={() => {
-                const key = defineKey.trim();
-                if (!key) return;
-                let parsed: boolean | number | string = defineValue;
-                if (defineValue === 'true') parsed = true;
-                else if (defineValue === 'false') parsed = false;
-                else if (/^-?\d+(\.\d+)?$/.test(defineValue)) parsed = Number(defineValue);
-                commitDoc((prev) => setDefines0(prev, { ...(prev.defines[0] ?? {}), [key]: parsed }));
-                setDefineKey('');
-                setDefineValue('true');
-              }}
-            >
-              添加
-            </button>
+        {schema.techniques.length <= 2 && (
+          <div style={{ fontSize: 11, color: 'var(--accent)' }}>
+            {blendModeLabel(config.blend)}
           </div>
         )}
       </AssetEditorSection>
@@ -382,61 +321,13 @@ export const MaterialAssetEditor: React.FC<MaterialAssetEditorProps> = ({ asset 
         </FieldLabel>
       </AssetEditorSection>
 
-      <AssetEditorSection title="Props">
-        <FieldLabel label="tintColor">
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <input
-              type="color"
-              disabled={!editable}
-              value={tintToCssHex(config.tintColor)}
-              onChange={(e) => {
-                const tint = tintFromCssHex(e.target.value, alpha);
-                commitDoc((prev) => setTintOnDocument(prev, tint));
-              }}
-              style={{ width: 42, height: 28, padding: 0, border: '1px solid var(--border-color)', background: 'transparent' }}
-            />
-            <span style={{ fontSize: 11, color: 'var(--text-secondary)', flex: 1 }}>
-              RGB {config.tintColor.r}, {config.tintColor.g}, {config.tintColor.b}
-            </span>
-          </div>
-        </FieldLabel>
-        <FieldLabel label="tintColor.a (0–255)">
-          <input
-            type="number"
-            min={0}
-            max={255}
-            disabled={!editable}
-            style={textInputStyle}
-            value={alpha}
-            onChange={(e) => setAlpha(Math.max(0, Math.min(255, parseInt(e.target.value, 10) || 0)))}
-            onBlur={() => {
-              if (!editable) return;
-              commitDoc((prev) => setTintOnDocument(prev, { ...config.tintColor, a: alpha }));
-            }}
-          />
-        </FieldLabel>
-        <div style={{ marginBottom: 4 }}>
-          <AssetSlot
-            slot="mainTexture"
-            label="mainTexture（可选，覆盖发射器贴图）"
-            assetId={doc.mainTextureAssetId}
-            onChange={(id) => {
-              if (!editable) return;
-              commitDoc(
-                (prev) => ({ ...prev, mainTextureAssetId: id }),
-                id ? '已设置材质贴图' : '已清除材质贴图'
-              );
-            }}
-          />
-          {config.mainTextureUuid && !doc.mainTextureAssetId && (
-            <div style={{ fontSize: 10, color: 'var(--text-secondary)', wordBreak: 'break-all' }}>
-              导入 UUID：{config.mainTextureUuid}
-            </div>
-          )}
-        </div>
-        <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
-          未知 props 会在序列化时原样保留；B2 将按 Schema 生成控件。
-        </div>
+      <AssetEditorSection title="Defines & Props">
+        <MaterialSchemaFields
+          doc={doc}
+          schema={schema}
+          editable={editable}
+          commitDoc={commitDoc}
+        />
       </AssetEditorSection>
 
       {editable && (

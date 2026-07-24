@@ -23,10 +23,12 @@ export function generateBuiltinShaderSource(asset: AssetEntry): string {
 
 CCEffect %{
   techniques:
-  - name: particle
+  - name: transparent
     passes:
     - vert: particle-vs:vert
       frag: particle-fs:frag
+      macros:
+        USE_ALPHA_TEST: false
       blendState:
         targets:
         - blend: true
@@ -37,6 +39,22 @@ CCEffect %{
       depthStencilState:
         depthTest: false
         depthWrite: false
+  - name: additive
+    passes:
+    - vert: particle-vs:vert
+      frag: particle-fs:frag
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: src_alpha
+          blendDst: one
+  properties:
+    mainTexture:
+      value: white
+      editor: { type: texture }
+    tintColor:
+      value: [1.0, 1.0, 1.0, 1.0]
+      editor: { type: color }
 }%
 
 CCProgram particle-vs %{

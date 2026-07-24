@@ -109,7 +109,7 @@ interface PassState {
 
 **Not in B1:** Effect YAML reflection, multi-pass UI, stencil detail, `.effect` file export
 
-### B2 — Schema-driven UI
+### B2 — Schema-driven UI ✅ (2026-07-24)
 
 - Parse CCEffect techniques / properties / macros
 - Builtin particle schema
