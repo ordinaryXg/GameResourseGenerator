@@ -76,7 +76,23 @@ const App: React.FC = () => {
     showToastMessage(`已应用：${asset.name}`);
   }, [project, selectedNodeId, updateEmitterAssetRefs, showToastMessage]);
 
-  useAppShortcuts();
+  const handleSave = useCallback(async () => {
+    if (!project) {
+      showToastMessage('没有打开的项目');
+      return;
+    }
+    if (projectPath) {
+      const ok = await saveProject();
+      if (ok) showToastMessage('项目已保存');
+      else showToastMessage('保存失败');
+    } else {
+      const ok = await saveProjectAs();
+      if (ok) showToastMessage('项目已保存');
+      else showToastMessage('保存已取消');
+    }
+  }, [project, projectPath, saveProject, saveProjectAs, showToastMessage]);
+
+  useAppShortcuts({ onSave: handleSave });
 
   useEffect(() => {
     useProjectStore.setState({ isLoaded: true });
@@ -100,17 +116,6 @@ const App: React.FC = () => {
   const handleExport = useCallback(() => {
     if (currentEffect) setExportOpen(true);
   }, [currentEffect, setExportOpen]);
-
-  const handleSave = useCallback(async () => {
-    if (!project) return;
-    if (projectPath) {
-      const ok = await saveProject();
-      if (ok) showToastMessage('项目已保存');
-    } else {
-      const ok = await saveProjectAs();
-      if (ok) showToastMessage('项目已保存');
-    }
-  }, [project, projectPath, saveProject, saveProjectAs, showToastMessage]);
 
   const handleOpenProject = useCallback(async () => {
     closeProject();

@@ -2,7 +2,7 @@
 import { coerceRangeValue } from '@/utils/particle-size';
 import { useProjectStore } from '@/stores/project-store';
 import { useAppStore } from '@/stores/app-store';
-import type { Particle3DConfig, RangeValue, ShapeType, RenderMode, BurstConfig } from '@/types/effect';
+import type { Particle3DConfig, RangeValue, ShapeType, RenderMode, BurstConfig, Vector3Range } from '@/types/effect';
 import { GradientEditor } from '../inspector/GradientEditor';
 import { CurveEditor } from '../inspector/CurveEditor';
 import { TransformSection } from '../inspector/TransformSection';
@@ -99,6 +99,50 @@ const RangeInput: React.FC<{
     />
   </div>
 );
+
+const Vector3RangeInput: React.FC<{
+  label: string;
+  value: Vector3Range | undefined;
+  onChange: (v: Vector3Range) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  fallback?: [number, number, number];
+}> = ({ label, value, onChange, min = 0, max = 100, step = 0.1, fallback = [0, 0, 0] }) => {
+  const axes = ['x', 'y', 'z'] as const;
+  const current: Vector3Range = value ?? {
+    x: { mode: 'constant', constant: fallback[0] },
+    y: { mode: 'constant', constant: fallback[1] },
+    z: { mode: 'constant', constant: fallback[2] }
+  };
+
+  return (
+    <div style={{ marginBottom: 6 }}>
+      <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>{label}</label>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+        {axes.map((axis, i) => (
+          <div key={axis}>
+            <label style={{ fontSize: 10, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>
+              {axis.toUpperCase()}
+            </label>
+            <input
+              type="number"
+              value={coerceRangeValue(current[axis], fallback[i]).constant ?? 0}
+              onChange={(e) => onChange({
+                ...current,
+                [axis]: { ...coerceRangeValue(current[axis], fallback[i]), constant: parseFloat(e.target.value) || 0 }
+              })}
+              min={min}
+              max={max}
+              step={step}
+              style={{ width: '100%', padding: '4px 6px', fontSize: 12 }}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 export const NodeInspectorPanel: React.FC = () => {
   const {
@@ -216,6 +260,28 @@ export const NodeInspectorPanel: React.FC = () => {
   return (
     <div style={{ height: '100%', overflow: 'auto' }}>
 
+      <div
+        style={{
+          padding: '8px 12px',
+          borderBottom: '1px solid var(--border-color)',
+          background: selectedNode.enabled ? 'transparent' : 'var(--bg-secondary)',
+          opacity: selectedNode.enabled ? 1 : 0.8
+        }}
+      >
+        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={selectedNode.enabled}
+            onChange={(e) => selectedNodeId && setNodeEnabled(selectedNodeId, e.target.checked)}
+          />
+          节点激活 (Node Active)
+        </label>
+        <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.45, paddingLeft: 22 }}>
+          控制整颗 ParticleSystem 是否参与预览与导出（对应 Cocos Node.active）。
+          关闭等同层级树「隐藏」；与各粒子模块标题栏 ON/OFF 无关。
+        </div>
+      </div>
+
       <Section title="变换 (Transform)" defaultOpen>
         <TransformSection
           transform={selectedNode.transform}
@@ -223,53 +289,88 @@ export const NodeInspectorPanel: React.FC = () => {
         />
       </Section>
 
-      <Section title="发射器" defaultOpen={false}>
-        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-          <input
-            type="checkbox"
-            checked={selectedNode.enabled}
-            onChange={(e) => selectedNodeId && setNodeEnabled(selectedNodeId, e.target.checked)}
-          />
-          启用发射器
-        </label>
-      </Section>
-
       <Section id="section-mainModule" title="主模块" highlighted={isHighlighted('mainModule')}>
+        <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 8 }}>
+          与 Cocos 主模块对齐；当前 UI 编辑常数值，曲线/随机区间可通过导入保留。
+        </div>
         <div style={{ marginBottom: 6 }}>
-          <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>系统时长 (秒)</label>
+          <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>系统时长 (Duration)</label>
           <input type="number" value={config.mainModule.duration}
             onChange={(e) => updateMain({ duration: parseFloat(e.target.value) || 1 })}
             min={0.1} max={120} step={0.1} style={{ width: '100%', padding: '4px 8px', fontSize: 12 }} />
         </div>
-        <RangeInput label="粒子寿命 (秒)" value={config.mainModule.startLifetime}
-          onChange={(v) => updateMain({ startLifetime: v })} min={0.01} max={60} />
         <div style={{ marginBottom: 6 }}>
-          <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>最大粒子数</label>
+          <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>最大粒子数 (Capacity)</label>
           <input type="number" value={config.mainModule.capacity}
             onChange={(e) => updateMain({ capacity: parseInt(e.target.value) || 1 })}
             min={1} max={10000} style={{ width: '100%', padding: '4px 8px', fontSize: 12 }} />
         </div>
-        <RangeInput label="初始速度" value={config.mainModule.startSpeed}
-          onChange={(v) => updateMain({ startSpeed: v })} min={0} max={100} />
+        <div style={{ marginBottom: 6, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+          <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <input type="checkbox" checked={config.mainModule.loop}
+              onChange={(e) => updateMain({ loop: e.target.checked })} />
+            循环 (Loop)
+          </label>
+          <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <input type="checkbox" checked={config.mainModule.playOnAwake ?? true}
+              onChange={(e) => updateMain({ playOnAwake: e.target.checked })} />
+            唤醒时播放 (PlayOnAwake)
+          </label>
+        </div>
         <div style={{ marginBottom: 6 }}>
-          <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>每秒发射数</label>
+          <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>模拟速度 (SimulationSpeed)</label>
+          <input type="number" value={config.mainModule.simulationSpeed ?? 1}
+            onChange={(e) => updateMain({ simulationSpeed: parseFloat(e.target.value) || 0 })}
+            min={0} max={10} step={0.1} style={{ width: '100%', padding: '4px 8px', fontSize: 12 }} />
+        </div>
+        <div style={{ marginBottom: 6 }}>
+          <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>开始延迟 (StartDelay, 秒)</label>
+          <input type="number" value={config.mainModule.startDelay ?? 0}
+            onChange={(e) => updateMain({ startDelay: parseFloat(e.target.value) || 0 })}
+            min={0} max={120} step={0.01} style={{ width: '100%', padding: '4px 8px', fontSize: 12 }} />
+        </div>
+        <RangeInput label="粒子寿命 (StartLifetime, 秒)" value={config.mainModule.startLifetime}
+          onChange={(v) => updateMain({ startLifetime: v })} min={0.01} max={60} />
+        <RangeInput label="初始速度 (StartSpeed)" value={config.mainModule.startSpeed}
+          onChange={(v) => updateMain({ startSpeed: v })} min={0} max={100} />
+        <Vector3RangeInput
+          label="初始大小 (StartSize3D)"
+          value={config.mainModule.startSize3D}
+          onChange={(v) => updateMain({ startSize3D: v })}
+          min={0}
+          max={100}
+          step={0.1}
+          fallback={[1, 1, 1]}
+        />
+        <Vector3RangeInput
+          label="初始旋转 (StartRotation3D, 度)"
+          value={config.mainModule.startRotation3D}
+          onChange={(v) => updateMain({ startRotation3D: v })}
+          min={-360}
+          max={360}
+          step={1}
+          fallback={[0, 0, 0]}
+        />
+        <div style={{ marginBottom: 6 }}>
+          <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>每秒发射数 (RateOverTime)</label>
           <input type="number" value={config.mainModule.rateOverTime}
             onChange={(e) => updateMain({ rateOverTime: parseInt(e.target.value) || 0 })}
             min={0} max={1000} style={{ width: '100%', padding: '4px 8px', fontSize: 12 }} />
         </div>
         <div style={{ marginBottom: 6 }}>
-          <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>重力系数</label>
+          <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>每单位距离发射数 (RateOverDistance)</label>
+          <input type="number" value={config.mainModule.rateOverDistance ?? 0}
+            onChange={(e) => updateMain({ rateOverDistance: parseFloat(e.target.value) || 0 })}
+            min={0} max={1000} step={0.1} style={{ width: '100%', padding: '4px 8px', fontSize: 12 }} />
+        </div>
+        <div style={{ marginBottom: 6 }}>
+          <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>重力系数 (GravityModifier)</label>
           <input type="number" value={config.mainModule.gravityModifier}
             onChange={(e) => updateMain({ gravityModifier: parseFloat(e.target.value) || 0 })}
             min={-10} max={10} step={0.1} style={{ width: '100%', padding: '4px 8px', fontSize: 12 }} />
         </div>
-        <div style={{ marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <label style={{ fontSize: 12 }}>循环播放</label>
-          <input type="checkbox" checked={config.mainModule.loop}
-            onChange={(e) => updateMain({ loop: e.target.checked })} />
-        </div>
         <div style={{ marginBottom: 6 }}>
-          <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>初始颜色</label>
+          <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>初始颜色 (StartColor)</label>
           <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 4 }}>
             与「颜色随生命周期」相乘；通常保持白色，仅在生命周期模块中编辑渐变。
           </div>

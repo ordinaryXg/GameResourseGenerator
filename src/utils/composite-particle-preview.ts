@@ -13,6 +13,7 @@ import {
   disposeSpriteMaterial
 } from '@/utils/texture-loader';
 import { resolveParticleBlending, resolveMaterialTintRgba, resolvePreviewTextureAssetId, applyTintToRgba } from '@/utils/material-blend';
+import { wrapEmissionClock } from '@/utils/particle-loop';
 import {
   cloneTextureForSheet,
   sampleTextureSheetContext,
@@ -190,12 +191,10 @@ export class CompositeParticlePreview extends ParticlePreview {
       const duration = cfg.mainModule.duration;
       const shouldLoop = cfg.mainModule.loop;
 
-      if (shouldLoop && duration > 0 && runtime.elapsedTime >= duration) {
-        const overflow = runtime.elapsedTime - duration;
-        runtime.elapsedTime = overflow;
-        runtime.emitTimer = 0;
+      const clock = wrapEmissionClock(runtime.elapsedTime, duration, shouldLoop);
+      runtime.elapsedTime = clock.elapsed;
+      if (clock.wrapped) {
         runtime.burstsTriggered.clear();
-        this.removeParticlesForEmitter(runtime.source.id);
       }
 
       const pastDuration = !shouldLoop && duration > 0 && runtime.elapsedTime > duration;
@@ -277,17 +276,6 @@ export class CompositeParticlePreview extends ParticlePreview {
       const p = this.taggedParticles.shift()!;
       this.scene.remove(p.sprite);
       disposeTaggedParticleMaterial(p);
-    }
-  }
-
-  private removeParticlesForEmitter(emitterId: string) {
-    for (let i = this.taggedParticles.length - 1; i >= 0; i--) {
-      const p = this.taggedParticles[i];
-      if (p.emitterId === emitterId) {
-        this.scene.remove(p.sprite);
-        disposeTaggedParticleMaterial(p);
-        this.taggedParticles.splice(i, 1);
-      }
     }
   }
 

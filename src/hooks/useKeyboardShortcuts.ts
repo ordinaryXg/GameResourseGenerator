@@ -17,9 +17,17 @@ function isEditableTarget(target: EventTarget | null): boolean {
 export function useKeyboardShortcuts(handlers: Record<string, ShortcutHandler>) {
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && e.key.toLowerCase() === 's') {
+        if (handlers['Cmd+S']) {
+          e.preventDefault();
+          handlers['Cmd+S']();
+        }
+        return;
+      }
+
       if (isEditableTarget(e.target)) return;
 
-      const mod = e.metaKey || e.ctrlKey;
       let key = '';
       if (mod && e.shiftKey && e.key.toLowerCase() === 'z') {
         key = 'Cmd+Shift+Z';
@@ -39,7 +47,11 @@ export function useKeyboardShortcuts(handlers: Record<string, ShortcutHandler>) 
   }, [handlers]);
 }
 
-export function useAppShortcuts() {
+export interface AppShortcutOptions {
+  onSave?: () => void | Promise<void>;
+}
+
+export function useAppShortcuts(options: AppShortcutOptions = {}) {
   const {
     setSettingsOpen, setExportOpen, setPresetProjectsOpen, setEmitterTemplatesOpen,
     setPreviewPlaying, previewPlaying, showToastMessage, clearInspectorTarget
@@ -69,6 +81,7 @@ export function useAppShortcuts() {
       }
     },
     'Cmd+E': () => setExportOpen(true),
+    'Cmd+S': () => { void options.onSave?.(); },
     'Cmd+,': () => setSettingsOpen(true),
     'Cmd+T': () => setPresetProjectsOpen(true),
     'SPACE': () => setPreviewPlaying(!previewPlaying),
@@ -89,7 +102,8 @@ export function useAppShortcuts() {
   }), [
     canUndoNow, canRedoNow, undo, redo, showToastMessage,
     setExportOpen, setSettingsOpen, setPresetProjectsOpen, setEmitterTemplatesOpen,
-    setPreviewPlaying, previewPlaying, clearInspectorTarget
+    setPreviewPlaying, previewPlaying, clearInspectorTarget,
+    options.onSave
   ]);
 
   useKeyboardShortcuts(handlers);

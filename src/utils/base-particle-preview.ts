@@ -4,6 +4,7 @@ import { composeParticleColor, sampleStartColor } from '@/utils/gradient-utils';
 import { configureParticleTexture, disposeSpriteMaterial } from '@/utils/texture-loader';
 import { computeParticleScale, sampleStartParticleSize } from '@/utils/particle-size';
 import { sampleEmitMotion } from '@/utils/particle-shape';
+import { wrapEmissionClock } from '@/utils/particle-loop';
 
 export interface AxisScreenVector {
   id: 'x' | 'y' | 'z';
@@ -206,10 +207,12 @@ export abstract class BaseParticlePreview {
     const duration = cfg.mainModule.duration;
     const shouldLoop = cfg.mainModule.loop;
 
-    if (shouldLoop && duration > 0 && this.elapsedTime >= duration) {
-      const overflow = this.elapsedTime - duration;
-      this.resetSimulation();
-      this.elapsedTime = overflow;
+    const clock = wrapEmissionClock(this.elapsedTime, duration, shouldLoop);
+    if (clock.wrapped) {
+      this.elapsedTime = clock.elapsed;
+      this.burstsTriggered.clear();
+    } else {
+      this.elapsedTime = clock.elapsed;
     }
 
     const pastDuration = !shouldLoop && duration > 0 && this.elapsedTime > duration;
