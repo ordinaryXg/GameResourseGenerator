@@ -16,16 +16,33 @@ import {
   techIdxFromBlend
 } from '@/utils/particle-material';
 
-export function defaultPassState(blend: ParticleBlendMode = 'additive'): PassState {
+export function defaultPassState(blend: ParticleBlendMode = 'additive', name?: string): PassState {
   const additive = blend === 'additive';
   return {
+    name,
     rasterizerState: { cullMode: 'none' },
-    depthStencilState: { depthTest: true, depthWrite: false, stencilTest: false },
+    depthStencilState: {
+      depthTest: true,
+      depthWrite: false,
+      depthFunc: 515,
+      stencilTest: false,
+      stencilFunc: 519,
+      stencilReadMask: 255,
+      stencilWriteMask: 255,
+      stencilFailOp: 7680,
+      stencilZFailOp: 7680,
+      stencilZPassOp: 7680,
+      stencilRef: 0
+    },
     blendState: {
       targets: [{
         blend: true,
         blendSrc: additive ? 770 : 1,
-        blendDst: additive ? 1 : 771
+        blendDst: additive ? 1 : 771,
+        blendSrcAlpha: additive ? 770 : 1,
+        blendDstAlpha: additive ? 1 : 771,
+        blendEq: 32774,
+        blendAlphaEq: 32774
       }]
     }
   };
@@ -83,20 +100,30 @@ function normalizePassState(raw: unknown, fallbackBlend: ParticleBlendMode): Pas
         blendDst: t.blendDst as number | string | undefined,
         blendSrcAlpha: t.blendSrcAlpha as number | string | undefined,
         blendDstAlpha: t.blendDstAlpha as number | string | undefined,
-        blendEq: t.blendEq as number | string | undefined
+        blendEq: t.blendEq as number | string | undefined,
+        blendAlphaEq: t.blendAlphaEq as number | string | undefined
       };
     })
     : base.blendState.targets;
 
   const cull = raster.cullMode;
   return {
+    name: typeof raw.name === 'string' ? raw.name : undefined,
     rasterizerState: {
       cullMode: cull === 'front' || cull === 'back' || cull === 'none' ? cull : 'none'
     },
     depthStencilState: {
       depthTest: typeof depth.depthTest === 'boolean' ? depth.depthTest : true,
       depthWrite: typeof depth.depthWrite === 'boolean' ? depth.depthWrite : false,
-      stencilTest: typeof depth.stencilTest === 'boolean' ? depth.stencilTest : false
+      depthFunc: (depth.depthFunc as number | string | undefined) ?? base.depthStencilState.depthFunc,
+      stencilTest: typeof depth.stencilTest === 'boolean' ? depth.stencilTest : false,
+      stencilFunc: (depth.stencilFunc as number | string | undefined) ?? base.depthStencilState.stencilFunc,
+      stencilReadMask: typeof depth.stencilReadMask === 'number' ? depth.stencilReadMask : 255,
+      stencilWriteMask: typeof depth.stencilWriteMask === 'number' ? depth.stencilWriteMask : 255,
+      stencilFailOp: (depth.stencilFailOp as number | string | undefined) ?? base.depthStencilState.stencilFailOp,
+      stencilZFailOp: (depth.stencilZFailOp as number | string | undefined) ?? base.depthStencilState.stencilZFailOp,
+      stencilZPassOp: (depth.stencilZPassOp as number | string | undefined) ?? base.depthStencilState.stencilZPassOp,
+      stencilRef: typeof depth.stencilRef === 'number' ? depth.stencilRef : 0
     },
     blendState: { targets }
   };
@@ -261,8 +288,27 @@ export function setTintOnDocument(doc: MaterialDocument, tint: ReturnType<typeof
 }
 
 export function setPass0(doc: MaterialDocument, pass: PassState): MaterialDocument {
+  return setPassAt(doc, 0, pass);
+}
+
+export function setPassAt(doc: MaterialDocument, index: number, pass: PassState): MaterialDocument {
   const states = [...doc.states];
-  states[0] = pass;
+  while (states.length <= index) {
+    states.push(defaultPassState(doc.techIdx === 0 ? 'alpha' : 'additive', `pass-${states.length}`));
+  }
+  states[index] = pass;
+  return { ...doc, states };
+}
+
+export function addPassState(doc: MaterialDocument, blend?: ParticleBlendMode): MaterialDocument {
+  const mode = blend ?? (doc.techIdx === 0 ? 'alpha' : 'additive');
+  const states = [...doc.states, defaultPassState(mode, `pass-${doc.states.length}`)];
+  return { ...doc, states };
+}
+
+export function removePassState(doc: MaterialDocument, index: number): MaterialDocument {
+  if (doc.states.length <= 1) return doc;
+  const states = doc.states.filter((_, i) => i !== index);
   return { ...doc, states };
 }
 

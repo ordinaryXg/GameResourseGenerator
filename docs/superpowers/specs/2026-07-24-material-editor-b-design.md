@@ -116,7 +116,7 @@ interface PassState {
 - Props/Defines widgets generated from schema
 - Unknown Effect → KV fallback
 
-### B3 — Multi-pass & Stencil
+### B3 — Multi-pass & Stencil ✅ (2026-07-24)
 
 - Multi-pass list editor
 - Full stencil fields

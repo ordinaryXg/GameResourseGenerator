@@ -1,10 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { AssetEntry } from '@/types/asset';
-import type { CullMode, MaterialDocument, PassState } from '@/types/material';
-import {
-  BLEND_FACTOR_OPTIONS,
-  BUILTIN_PARTICLE_EFFECT_UUID
-} from '@/types/material';
+import type { MaterialDocument } from '@/types/material';
+import { BUILTIN_PARTICLE_EFFECT_UUID } from '@/types/material';
 import { useProjectStore } from '@/stores/project-store';
 import { useAssetStore } from '@/stores/asset-store';
 import { useAppStore } from '@/stores/app-store';
@@ -14,8 +11,7 @@ import { isProjectEditableAsset } from '@/utils/asset-editable';
 import {
   getMaterialDocument,
   materialDocumentMetaPatch,
-  particleConfigFromDocument,
-  setPass0
+  particleConfigFromDocument
 } from '@/utils/material-document';
 import { resolveEffectSchema } from '@/utils/effect-schema';
 import {
@@ -28,6 +24,7 @@ import {
 } from '@/components/properties/editors/AssetEditorShared';
 import { AssetMetaFields } from '@/components/properties/editors/AssetMetaFields';
 import { MaterialSchemaFields } from '@/components/properties/editors/MaterialSchemaFields';
+import { MaterialPassStatesEditor } from '@/components/properties/editors/MaterialPassStatesEditor';
 
 interface MaterialAssetEditorProps {
   asset: AssetEntry;
@@ -71,11 +68,6 @@ export const MaterialAssetEditor: React.FC<MaterialAssetEditorProps> = ({ asset 
   }, [asset.id, asset.name, asset.meta?.description, doc.effect]);
 
   const sourcePreview = useMemo(() => formatMaterialSourcePreview(asset), [asset]);
-  const pass0: PassState = doc.states[0] ?? {
-    rasterizerState: { cullMode: 'none' },
-    depthStencilState: { depthTest: true, depthWrite: false },
-    blendState: { targets: [{ blend: true, blendSrc: 770, blendDst: 1 }] }
-  };
   const mode = effectModeOf(doc);
 
   const commitDoc = useCallback((
@@ -100,34 +92,6 @@ export const MaterialAssetEditor: React.FC<MaterialAssetEditorProps> = ({ asset 
     if (!editable) return;
     updateProjectAsset(asset.id, { meta: { ...asset.meta, description: description.trim() } });
   }, [asset, description, editable, updateProjectAsset]);
-
-  const updatePass0 = useCallback((patch: Partial<{
-    cullMode: CullMode;
-    depthTest: boolean;
-    depthWrite: boolean;
-    blend: boolean;
-    blendSrc: number;
-    blendDst: number;
-  }>) => {
-    commitDoc((prev) => {
-      const cur = prev.states[0] ?? pass0;
-      const target = { ...(cur.blendState.targets[0] ?? {}) };
-      if (patch.blend !== undefined) target.blend = patch.blend;
-      if (patch.blendSrc !== undefined) target.blendSrc = patch.blendSrc;
-      if (patch.blendDst !== undefined) target.blendDst = patch.blendDst;
-      return setPass0(prev, {
-        rasterizerState: {
-          cullMode: patch.cullMode ?? cur.rasterizerState.cullMode ?? 'none'
-        },
-        depthStencilState: {
-          depthTest: patch.depthTest ?? cur.depthStencilState.depthTest ?? true,
-          depthWrite: patch.depthWrite ?? cur.depthStencilState.depthWrite ?? false,
-          stencilTest: cur.depthStencilState.stencilTest
-        },
-        blendState: { targets: [target] }
-      });
-    });
-  }, [commitDoc, pass0]);
 
   return (
     <div style={{ padding: 10 }}>
@@ -252,73 +216,12 @@ export const MaterialAssetEditor: React.FC<MaterialAssetEditorProps> = ({ asset 
         )}
       </AssetEditorSection>
 
-      <AssetEditorSection title="Pass States (Pass 0)">
-        <FieldLabel label="Cull Mode">
-          <select
-            className="select-sm"
-            style={{ width: '100%' }}
-            disabled={!editable}
-            value={pass0.rasterizerState.cullMode ?? 'none'}
-            onChange={(e) => updatePass0({ cullMode: e.target.value as CullMode })}
-          >
-            <option value="none">none</option>
-            <option value="front">front</option>
-            <option value="back">back</option>
-          </select>
-        </FieldLabel>
-        <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 11, marginBottom: 6 }}>
-          <input
-            type="checkbox"
-            disabled={!editable}
-            checked={pass0.depthStencilState.depthTest !== false}
-            onChange={(e) => updatePass0({ depthTest: e.target.checked })}
-          />
-          Depth Test
-        </label>
-        <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 11, marginBottom: 6 }}>
-          <input
-            type="checkbox"
-            disabled={!editable}
-            checked={!!pass0.depthStencilState.depthWrite}
-            onChange={(e) => updatePass0({ depthWrite: e.target.checked })}
-          />
-          Depth Write
-        </label>
-        <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 11, marginBottom: 6 }}>
-          <input
-            type="checkbox"
-            disabled={!editable}
-            checked={pass0.blendState.targets[0]?.blend !== false}
-            onChange={(e) => updatePass0({ blend: e.target.checked })}
-          />
-          Blend
-        </label>
-        <FieldLabel label="blendSrc">
-          <select
-            className="select-sm"
-            style={{ width: '100%' }}
-            disabled={!editable}
-            value={Number(pass0.blendState.targets[0]?.blendSrc ?? 770)}
-            onChange={(e) => updatePass0({ blendSrc: parseInt(e.target.value, 10) })}
-          >
-            {BLEND_FACTOR_OPTIONS.map(o => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-        </FieldLabel>
-        <FieldLabel label="blendDst">
-          <select
-            className="select-sm"
-            style={{ width: '100%' }}
-            disabled={!editable}
-            value={Number(pass0.blendState.targets[0]?.blendDst ?? 1)}
-            onChange={(e) => updatePass0({ blendDst: parseInt(e.target.value, 10) })}
-          >
-            {BLEND_FACTOR_OPTIONS.map(o => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-        </FieldLabel>
+      <AssetEditorSection title="Pass States">
+        <MaterialPassStatesEditor
+          doc={doc}
+          editable={editable}
+          commitDoc={commitDoc}
+        />
       </AssetEditorSection>
 
       <AssetEditorSection title="Defines & Props">
