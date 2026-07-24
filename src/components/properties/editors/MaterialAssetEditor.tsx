@@ -11,9 +11,11 @@ import { isProjectEditableAsset } from '@/utils/asset-editable';
 import {
   getMaterialDocument,
   materialDocumentMetaPatch,
-  particleConfigFromDocument
+  particleConfigFromDocument,
+  getEffectUuid
 } from '@/utils/material-document';
 import { resolveEffectSchema } from '@/utils/effect-schema';
+import { ensureShaderEffectUuid, resolveShaderEffectUuid } from '@/utils/effect-io';
 import {
   AssetEditorHeader,
   AssetEditorSection,
@@ -81,6 +83,25 @@ export const MaterialAssetEditor: React.FC<MaterialAssetEditorProps> = ({ asset 
     if (toast) showToastMessage(toast);
   }, [asset, editable, updateProjectAsset, showToastMessage]);
 
+  const bindShaderEffect = useCallback((shader: AssetEntry | undefined, toast?: string) => {
+    if (!shader) {
+      commitDoc((prev) => ({
+        ...prev,
+        effect: { kind: 'shader-asset', assetId: '', uuid: undefined }
+      }), toast);
+      return;
+    }
+    const stamped = ensureShaderEffectUuid(shader);
+    const uuid = resolveShaderEffectUuid(stamped);
+    if (stamped.meta?.uuid !== shader.meta?.uuid) {
+      updateProjectAsset(shader.id, { meta: { ...shader.meta, uuid } });
+    }
+    commitDoc((prev) => ({
+      ...prev,
+      effect: { kind: 'shader-asset', assetId: shader.id, uuid }
+    }), toast);
+  }, [commitDoc, updateProjectAsset]);
+
   const commitName = useCallback(() => {
     const v = name.trim();
     if (!v || v === asset.name || !editable) return;
@@ -107,20 +128,15 @@ export const MaterialAssetEditor: React.FC<MaterialAssetEditorProps> = ({ asset 
             value={mode}
             onChange={(e) => {
               const next = e.target.value as EffectMode;
+              if (next === 'shader') {
+                bindShaderEffect(shaders[0], '已更新 Effect 来源');
+                return;
+              }
               commitDoc((prev) => {
                 if (next === 'builtin') {
                   return {
                     ...prev,
                     effect: { kind: 'builtin-uuid', uuid: BUILTIN_PARTICLE_EFFECT_UUID }
-                  };
-                }
-                if (next === 'shader') {
-                  const first = shaders[0];
-                  return {
-                    ...prev,
-                    effect: first
-                      ? { kind: 'shader-asset', assetId: first.id, uuid: first.meta?.uuid }
-                      : { kind: 'shader-asset', assetId: '', uuid: undefined }
                   };
                 }
                 return {
@@ -149,10 +165,7 @@ export const MaterialAssetEditor: React.FC<MaterialAssetEditorProps> = ({ asset 
               onChange={(e) => {
                 const id = e.target.value;
                 const sh = shaders.find(s => s.id === id);
-                commitDoc((prev) => ({
-                  ...prev,
-                  effect: { kind: 'shader-asset', assetId: id, uuid: sh?.meta?.uuid }
-                }));
+                bindShaderEffect(sh);
               }}
             >
               <option value="">（未选择）</option>
@@ -183,9 +196,10 @@ export const MaterialAssetEditor: React.FC<MaterialAssetEditorProps> = ({ asset 
         )}
 
         <div style={{ fontSize: 10, color: 'var(--text-secondary)', wordBreak: 'break-all' }}>
-          UUID: {doc.effect.kind === 'shader-asset'
-            ? (doc.effect.uuid || `${BUILTIN_PARTICLE_EFFECT_UUID}（导出将回退，B4 写 .effect）`)
-            : (doc.effect.uuid || BUILTIN_PARTICLE_EFFECT_UUID)}
+          UUID: {getEffectUuid(doc, getAssetById)}
+          {doc.effect.kind === 'shader-asset' && !doc.effect.uuid && !getAssetById(doc.effect.assetId)?.meta?.uuid
+            ? '（选择 Shader 后自动分配，导出时写入 .effect）'
+            : ''}
         </div>
       </AssetEditorSection>
 

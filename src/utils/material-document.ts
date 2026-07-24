@@ -154,9 +154,16 @@ function resolveEffectRef(meta: NonNullable<AssetEntry['meta']>, docEffect?: Eff
   return { kind: 'external-uuid', uuid };
 }
 
-function effectUuidOf(effect: EffectRef): string {
+function effectUuidOf(
+  effect: EffectRef,
+  getAsset?: (id: string) => AssetEntry | null | undefined
+): string {
   if (effect.kind === 'shader-asset') {
-    return effect.uuid || BUILTIN_PARTICLE_EFFECT_UUID;
+    if (effect.uuid) return effect.uuid;
+    const asset = getAsset?.(effect.assetId);
+    if (asset?.meta?.uuid) return asset.meta.uuid;
+    if (asset?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(asset.id)) return asset.id;
+    return BUILTIN_PARTICLE_EFFECT_UUID;
   }
   return effect.uuid || BUILTIN_PARTICLE_EFFECT_UUID;
 }
@@ -264,8 +271,25 @@ export function materialDocumentMetaPatch(
   return syncCompatMirrors(next);
 }
 
-export function getEffectUuid(doc: MaterialDocument): string {
-  return effectUuidOf(doc.effect);
+export function getEffectUuid(
+  doc: MaterialDocument,
+  getAsset?: (id: string) => AssetEntry | null | undefined
+): string {
+  return effectUuidOf(doc.effect, getAsset);
+}
+
+/** Stamp shader Effect UUID onto the document when resolving from asset. */
+export function withResolvedEffectUuid(
+  doc: MaterialDocument,
+  getAsset?: (id: string) => AssetEntry | null | undefined
+): MaterialDocument {
+  if (doc.effect.kind !== 'shader-asset') return doc;
+  const uuid = effectUuidOf(doc.effect, getAsset);
+  if (doc.effect.uuid === uuid) return doc;
+  return {
+    ...doc,
+    effect: { ...doc.effect, uuid }
+  };
 }
 
 export function particleConfigFromDocument(doc: MaterialDocument): ParticleMaterialConfig {

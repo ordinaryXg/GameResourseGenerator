@@ -122,7 +122,7 @@ interface PassState {
 - Full stencil fields
 - Optional advanced blend factors (srcAlpha/dstAlpha/eq)
 
-### B4 — Export closed loop
+### B4 — Export closed loop ✅ (2026-07-24)
 
 - Export project Shader as `.effect` + `.meta` with stable UUID
 - Material `_effectAsset` points at exported UUID
@@ -141,11 +141,11 @@ interface PassState {
 
 ## Acceptance (program)
 
-- [ ] Open legacy Plan A materials without data loss
-- [ ] Edit defines/states; `.mtl` preview matches export
-- [ ] Prefab import restores defines/states/props
-- [ ] B2+: schema drives particle props
-- [ ] B4: custom shader material opens in Cocos after export package
+- [x] Open legacy Plan A materials without data loss
+- [x] Edit defines/states; `.mtl` preview matches export
+- [x] Prefab import restores defines/states/props
+- [x] B2+: schema drives particle props
+- [x] B4: custom shader material opens in Cocos after export package
 
 ## Risks
 

@@ -3,6 +3,7 @@ import type { AssetEntry } from '@/types/asset';
 import { useProjectStore } from '@/stores/project-store';
 import { useAppStore } from '@/stores/app-store';
 import { generateBuiltinShaderSource } from '@/utils/builtin-asset-content';
+import { ensureShaderEffectUuid, resolveShaderEffectUuid } from '@/utils/effect-io';
 import { isProjectEditableAsset } from '@/utils/asset-editable';
 import { EffectCodeEditor } from '@/components/properties/editors/EffectCodeEditor';
 import {
@@ -32,7 +33,15 @@ export const ShaderAssetEditor: React.FC<ShaderAssetEditorProps> = ({ asset }) =
     setSource(generateBuiltinShaderSource(asset));
     setName(asset.name);
     setDirty(false);
+    if (editable && asset.type === 'shader' && !asset.meta?.uuid) {
+      const stamped = ensureShaderEffectUuid(asset);
+      updateProjectAsset(asset.id, {
+        meta: { ...asset.meta, uuid: resolveShaderEffectUuid(stamped) }
+      });
+    }
   }, [asset.id, asset.name, asset.meta?.shaderSource]);
+
+  const effectUuid = asset.meta?.uuid ?? (editable ? resolveShaderEffectUuid(asset) : '—');
 
   const commitSource = useCallback(() => {
     if (!editable || !dirty) return;
@@ -78,7 +87,16 @@ export const ShaderAssetEditor: React.FC<ShaderAssetEditorProps> = ({ asset }) =
               onBlur={commitName}
             />
           </FieldLabel>
+          <div style={{ fontSize: 10, color: 'var(--text-secondary)', wordBreak: 'break-all', marginTop: 4 }}>
+            Effect UUID: {effectUuid}
+          </div>
         </AssetEditorSection>
+      )}
+
+      {!editable && (
+        <div style={{ fontSize: 10, color: 'var(--text-secondary)', wordBreak: 'break-all', marginBottom: 8 }}>
+          Effect UUID: {effectUuid}
+        </div>
       )}
 
       <AssetEditorSection title="Effect 源码">

@@ -186,7 +186,10 @@ export const ExportModal: React.FC = () => {
                 {exportManifest.items.map((item) => (
                   <tr key={item.fileName} style={{ borderTop: '1px solid var(--border-color)' }}>
                     <td style={{ padding: '4px 6px', whiteSpace: 'nowrap' }}>
-                      {item.category === 'prefab' ? 'Prefab' : item.category === 'texture' ? '贴图' : '材质'}
+                      {item.category === 'prefab' ? 'Prefab'
+                        : item.category === 'texture' ? '贴图'
+                        : item.category === 'effect' ? 'Effect'
+                        : '材质'}
                     </td>
                     <td style={{ padding: '4px 6px', wordBreak: 'break-all' }}>
                       {item.fileName}

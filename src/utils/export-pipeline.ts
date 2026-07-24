@@ -5,7 +5,6 @@ import type { EffectProject } from '@/types/project';
 import { generateUUID } from './effect-defaults';
 import {
   CocosPrefabBuilder,
-  buildParticleMaterial,
   buildMaterialMeta,
   buildPrefabMeta
 } from './cocos-serializers';
@@ -18,9 +17,15 @@ import {
   type ExportAssetSummary
 } from './asset-texture-export';
 import { getParticleMaterialConfig } from './particle-material';
-import { getMaterialDocument, getEffectUuid } from './material-document';
+import { getMaterialDocument, getEffectUuid, withResolvedEffectUuid } from './material-document';
 import { serializeMaterialDocument } from './mtl-io';
 import { getEmitterNodes } from './preview-sources';
+import {
+  buildEffectExportFile,
+  ensureShaderEffectUuid,
+  resolveShaderEffectUuid
+} from './effect-io';
+import type { MaterialDocument } from '@/types/material';
 
 export interface ProjectExportAssetFile {
   fileName: string;
@@ -62,7 +67,10 @@ function collectProjectExportBindings(
     blend: 'additive' | 'alpha';
     name: string;
     materialAssetId?: string;
+    materialDoc: MaterialDocument;
+    shaderAssetId?: string;
   }>;
+  shaderByAssetId: Map<string, AssetEntry>;
   emitterBindings: Map<string, { materialUuid: string; spriteFrameUuid: string }>;
   emitterSummaries: ExportAssetSummary[];
 } {
@@ -80,9 +88,41 @@ function collectProjectExportBindings(
     blend: 'additive' | 'alpha';
     name: string;
     materialAssetId?: string;
+    materialDoc: MaterialDocument;
+    shaderAssetId?: string;
   }>();
+  const shaderByAssetId = new Map<string, AssetEntry>();
+  const shaderUuidCache = new Map<string, string>();
   const emitterBindings = new Map<string, { materialUuid: string; spriteFrameUuid: string }>();
   const emitterSummaries: ExportAssetSummary[] = [];
+
+  const resolveExportEffect = (matDoc: MaterialDocument): {
+    doc: MaterialDocument;
+    effectUuid: string;
+    shaderAssetId?: string;
+  } => {
+    if (matDoc.effect.kind !== 'shader-asset' || !matDoc.effect.assetId) {
+      const doc = withResolvedEffectUuid(matDoc, getAsset);
+      return { doc, effectUuid: getEffectUuid(doc, getAsset) };
+    }
+    const rawShader = getAsset(matDoc.effect.assetId);
+    if (!rawShader || rawShader.type !== 'shader') {
+      const doc = withResolvedEffectUuid(matDoc, getAsset);
+      return { doc, effectUuid: getEffectUuid(doc, getAsset) };
+    }
+    let uuid = shaderUuidCache.get(rawShader.id);
+    if (!uuid) {
+      const stamped = ensureShaderEffectUuid(rawShader);
+      uuid = resolveShaderEffectUuid(stamped);
+      shaderUuidCache.set(rawShader.id, uuid);
+      shaderByAssetId.set(rawShader.id, { ...stamped, meta: { ...stamped.meta, uuid } });
+    }
+    const doc: MaterialDocument = {
+      ...matDoc,
+      effect: { kind: 'shader-asset', assetId: rawShader.id, uuid }
+    };
+    return { doc, effectUuid: uuid, shaderAssetId: rawShader.id };
+  };
 
   for (const emitter of emitters) {
     const texAsset = resolveTextureAssetForExport(emitter.assetRefs, projectAssets);
@@ -92,7 +132,8 @@ function collectProjectExportBindings(
     const tex = textureByAssetId.get(texAsset.id)!;
     const matAsset = emitter.assetRefs.material ? getAsset(emitter.assetRefs.material) : null;
     const matConfig = getParticleMaterialConfig(matAsset);
-    const matDoc = getMaterialDocument(matAsset);
+    const rawDoc = getMaterialDocument(matAsset);
+    const { doc: matDoc, effectUuid, shaderAssetId } = resolveExportEffect(rawDoc);
     // Material may override mainTexture via its own prop; otherwise use emitter texture.
     let spriteFrameUuid = tex.spriteFrameUuid;
     if (matConfig.mainTextureAssetId) {
@@ -116,10 +157,12 @@ function collectProjectExportBindings(
         spriteFrameUuid,
         fileBase: sanitizeExportBaseName(matAsset?.name ?? `${emitter.name}-particle`),
         tintColor: matConfig.tintColor,
-        effectUuid: getEffectUuid(matDoc),
+        effectUuid,
         blend: matConfig.blend,
         name: matAsset?.name ?? `${emitter.name}-particle`,
-        materialAssetId: matAsset?.id
+        materialAssetId: matAsset?.id,
+        materialDoc: matDoc,
+        shaderAssetId
       });
     }
     const mat = materialByKey.get(matKey)!;
@@ -130,14 +173,14 @@ function collectProjectExportBindings(
     emitterSummaries.push(buildExportAssetSummary(emitter.assetRefs, projectAssets, getAsset));
   }
 
-  return { textureByAssetId, materialByKey, emitterBindings, emitterSummaries };
+  return { textureByAssetId, materialByKey, shaderByAssetId, emitterBindings, emitterSummaries };
 }
 
 export function generateProjectPrefab(
   project: EffectProject,
   ctx?: ProjectExportContext
 ): ProjectPrefabExportResult {
-  const { textureByAssetId, materialByKey, emitterBindings, emitterSummaries } =
+  const { textureByAssetId, materialByKey, shaderByAssetId, emitterBindings, emitterSummaries } =
     collectProjectExportBindings(project, ctx);
   const emitters = getEmitterNodes(project.root);
 
@@ -162,6 +205,24 @@ export function generateProjectPrefab(
     });
   }
 
+  const usedEffectNames = new Set<string>();
+  for (const [, shader] of shaderByAssetId) {
+    let fileBase = sanitizeExportBaseName(shader.name);
+    if (usedEffectNames.has(fileBase)) {
+      let i = 2;
+      while (usedEffectNames.has(`${fileBase}-${i}`)) i++;
+      fileBase = `${fileBase}-${i}`;
+    }
+    usedEffectNames.add(fileBase);
+    const effectFile = buildEffectExportFile(shader, { fileBase });
+    assetFiles.push({
+      fileName: effectFile.fileName,
+      content: effectFile.content,
+      metaFileName: effectFile.metaFileName,
+      metaContent: effectFile.metaContent
+    });
+  }
+
   const usedMaterialNames = new Set<string>();
   for (const [, mat] of materialByKey) {
     let fileBase = mat.fileBase;
@@ -171,20 +232,10 @@ export function generateProjectPrefab(
       fileBase = `${fileBase}-${i}`;
     }
     usedMaterialNames.add(fileBase);
-    const matAsset = mat.materialAssetId ? (ctx?.getAsset?.(mat.materialAssetId) ?? null) : null;
-    const mtlJson = matAsset
-      ? serializeMaterialDocument(getMaterialDocument(matAsset), {
-          name: mat.name,
-          mainTextureUuid: mat.spriteFrameUuid
-        })
-      : buildParticleMaterial({
-          spriteFrameUuid: mat.spriteFrameUuid,
-          techIdx: mat.techIdx,
-          name: mat.name,
-          tintColor: mat.tintColor,
-          effectUuid: mat.effectUuid,
-          blend: mat.blend
-        });
+    const mtlJson = serializeMaterialDocument(mat.materialDoc, {
+      name: mat.name,
+      mainTextureUuid: mat.spriteFrameUuid
+    });
     assetFiles.push({
       fileName: `${fileBase}.mtl`,
       content: JSON.stringify(mtlJson, null, 2),
@@ -202,7 +253,7 @@ export function generateProjectPrefab(
   };
 }
 
-export type ExportManifestCategory = 'prefab' | 'texture' | 'material';
+export type ExportManifestCategory = 'prefab' | 'texture' | 'material' | 'effect';
 
 export interface ExportManifestItem {
   category: ExportManifestCategory;
@@ -219,6 +270,7 @@ export interface ProjectExportManifest {
   emitterCount: number;
   uniqueTextureCount: number;
   uniqueMaterialCount: number;
+  uniqueEffectCount: number;
   totalFileCount: number;
 }
 
@@ -239,6 +291,7 @@ export function buildProjectExportManifest(
 
   let textureCount = 0;
   let materialCount = 0;
+  let effectCount = 0;
   for (const asset of preview.assetFiles) {
     if (asset.fileName.endsWith('.mtl')) {
       materialCount += 1;
@@ -247,6 +300,14 @@ export function buildProjectExportManifest(
         fileName: asset.fileName,
         metaFileName: asset.metaFileName,
         detail: '粒子材质'
+      });
+    } else if (asset.fileName.endsWith('.effect')) {
+      effectCount += 1;
+      items.push({
+        category: 'effect',
+        fileName: asset.fileName,
+        metaFileName: asset.metaFileName,
+        detail: '自定义 Effect'
       });
     } else {
       textureCount += 1;
@@ -267,6 +328,7 @@ export function buildProjectExportManifest(
     emitterCount: preview.emitterCount,
     uniqueTextureCount: textureCount,
     uniqueMaterialCount: materialCount,
+    uniqueEffectCount: effectCount,
     totalFileCount: items.reduce((n, item) => n + 2, 0)
   };
 }

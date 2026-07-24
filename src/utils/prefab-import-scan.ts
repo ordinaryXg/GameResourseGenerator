@@ -1,6 +1,8 @@
 import type { Dirent } from 'fs';
 
-export const PREFAB_IMPORT_ASSET_SUBDIRS = ['textures', 'materials', 'texture', 'material', 'images'] as const;
+export const PREFAB_IMPORT_ASSET_SUBDIRS = [
+  'textures', 'materials', 'texture', 'material', 'images', 'effects', 'shaders', 'effect'
+] as const;
 
 export const PREFAB_IMPORT_SKIP_DIRS = new Set([
   'node_modules',
@@ -31,7 +33,7 @@ export interface CollectPrefabFilesOptions {
 }
 
 function isImportCandidate(name: string): boolean {
-  return /\.(prefab|mtl|png|jpg|jpeg|webp|meta)$/i.test(name);
+  return /\.(prefab|mtl|png|jpg|jpeg|webp|meta|effect)$/i.test(name);
 }
 
 function isImage(name: string): boolean {

@@ -2,6 +2,9 @@ import type { AssetEntry } from '@/types/asset';
 import type { EffectProject } from '@/types/project';
 import { buildDefaultTextureExport } from '@/utils/default-particle-texture';
 import { parseMtlContent } from '@/utils/mtl-io';
+import { getMaterialDocument, syncCompatMirrors } from '@/utils/material-document';
+import { generateUUID } from '@/utils/effect-defaults';
+import { BUILTIN_PARTICLE_EFFECT_UUID } from '@/types/material';
 
 export interface PrefabImportFile {
   /** Basename, e.g. `smoke.png` */
@@ -20,7 +23,7 @@ export interface PrefabImportBundleResult {
 
 interface UuidBinding {
   relativePath: string;
-  kind: 'texture' | 'material';
+  kind: 'texture' | 'material' | 'shader';
 }
 
 function normalizeRelPath(path: string): string {
@@ -49,6 +52,7 @@ function assetPathFromMetaFile(file: PrefabImportFile): string | null {
 
 function assetKindFromPath(path: string): UuidBinding['kind'] | null {
   if (path.endsWith('.mtl')) return 'material';
+  if (path.endsWith('.effect')) return 'shader';
   if (/\.(png|jpg|jpeg|webp)$/i.test(path)) return 'texture';
   return null;
 }
@@ -195,14 +199,30 @@ function bindEntry(
   if (entry.type === 'material' && file.encoding !== 'base64') {
     const parsed = parseMtlContent(file.content);
     if (parsed) {
+      // Preserve full materialDoc (defines/states/props) from .mtl
       nextMeta = { ...entry.meta, ...parsed, uuid: entry.meta?.uuid ?? parsed.uuid };
     }
+  }
+
+  if ((entry.type === 'shader' || binding?.kind === 'shader') && file.encoding !== 'base64') {
+    const metaFile = findMetaForAsset(files, file);
+    let effectUuid = entry.meta?.uuid;
+    if (metaFile) {
+      const uuids = parseMetaUuids(metaFile.content);
+      if (uuids[0]) effectUuid = uuids[0];
+    }
+    nextMeta = {
+      ...nextMeta,
+      uuid: effectUuid,
+      shaderSource: file.content
+    };
   }
 
   return {
     entry: {
       ...entry,
-      name: baseName.replace(/\.(png|mtl|jpg|jpeg|webp)$/i, ''),
+      name: baseName.replace(/\.(png|mtl|jpg|jpeg|webp|effect)$/i, ''),
+      type: binding?.kind === 'shader' ? 'shader' : entry.type,
       uri,
       meta: nextMeta
     },
@@ -210,7 +230,7 @@ function bindEntry(
   };
 }
 
-/** Bind imported AssetEntry URIs to PNG/MTL files (data: URL or relative path). */
+/** Bind imported AssetEntry URIs to PNG/MTL/Effect files (data: URL or relative path). */
 export function bindPrefabImportAssets(
   project: EffectProject,
   files: PrefabImportFile[]
@@ -219,18 +239,125 @@ export function bindPrefabImportAssets(
   const warnings: string[] = [];
   let boundAssetCount = 0;
 
-  const registry = project.assetRegistry.map((entry): AssetEntry => {
+  // Create shader stubs for .effect files referenced only via material _effectAsset
+  const shaderEntries = collectImportedShaderAssets(files, byUuid, project.assetRegistry);
+
+  let registry = [...project.assetRegistry, ...shaderEntries];
+
+  registry = registry.map((entry): AssetEntry => {
     const result = bindEntry(entry, files, byUuid);
     if (result.bound) boundAssetCount += 1;
     else if (result.warning) warnings.push(result.warning);
     return result.entry;
   });
 
+  registry = relinkMaterialsToImportedShaders(registry);
+
   return {
     project: { ...project, assetRegistry: registry },
     boundAssetCount,
     warnings
   };
+}
+
+function shortUuid(uuid: string): string {
+  return uuid.replace(/-/g, '').slice(0, 8);
+}
+
+function collectImportedShaderAssets(
+  files: PrefabImportFile[],
+  byUuid: Map<string, UuidBinding>,
+  existing: AssetEntry[]
+): AssetEntry[] {
+  const existingUuids = new Set(
+    existing.flatMap(a => (a.meta?.uuid ? uuidLookupKeys(a.meta.uuid) : []))
+  );
+  const created: AssetEntry[] = [];
+  const seenPaths = new Set<string>();
+
+  for (const [, binding] of byUuid) {
+    if (binding.kind !== 'shader') continue;
+    const pathKey = binding.relativePath.toLowerCase();
+    if (seenPaths.has(pathKey)) continue;
+    seenPaths.add(pathKey);
+
+    const file = findFile(files, binding.relativePath);
+    if (!file || file.encoding === 'base64') continue;
+
+    const metaFile = findMetaForAsset(files, file);
+    const uuids = metaFile ? parseMetaUuids(metaFile.content) : [];
+    const effectUuid = uuids[0];
+    if (effectUuid && uuidLookupKeys(effectUuid).some(k => existingUuids.has(k))) continue;
+
+    const id = effectUuid
+      ? `imported-shader-${shortUuid(effectUuid)}`
+      : `imported-shader-${generateUUID().slice(0, 8)}`;
+    const baseName = (file.relativePath.split('/').pop() ?? file.name)
+      .replace(/\.effect$/i, '');
+
+    const entry: AssetEntry = {
+      id,
+      name: baseName,
+      type: 'shader',
+      source: 'imported',
+      uri: normalizeRelPath(file.relativePath),
+      meta: {
+        uuid: effectUuid,
+        shaderSource: file.content
+      }
+    };
+    created.push(entry);
+    if (effectUuid) {
+      for (const key of uuidLookupKeys(effectUuid)) existingUuids.add(key);
+    }
+  }
+
+  return created;
+}
+
+/** Point materials at imported shaders when _effectAsset UUID matches. */
+function relinkMaterialsToImportedShaders(registry: AssetEntry[]): AssetEntry[] {
+  const shadersByUuid = new Map<string, AssetEntry>();
+  for (const asset of registry) {
+    if (asset.type !== 'shader' || !asset.meta?.uuid) continue;
+    for (const key of uuidLookupKeys(asset.meta.uuid)) {
+      shadersByUuid.set(key, asset);
+    }
+  }
+
+  return registry.map((entry) => {
+    if (entry.type !== 'material') return entry;
+    const doc = getMaterialDocument(entry);
+    const effectUuid =
+      doc.effect.kind === 'shader-asset'
+        ? (doc.effect.uuid || entry.meta?.effectUuid)
+        : doc.effect.uuid;
+
+    if (!effectUuid || effectUuid === BUILTIN_PARTICLE_EFFECT_UUID) return entry;
+
+    let shader: AssetEntry | undefined;
+    for (const key of uuidLookupKeys(effectUuid)) {
+      shader = shadersByUuid.get(key);
+      if (shader) break;
+    }
+    if (!shader) return entry;
+
+    const nextDoc = {
+      ...doc,
+      effect: {
+        kind: 'shader-asset' as const,
+        assetId: shader.id,
+        uuid: shader.meta?.uuid ?? effectUuid
+      }
+    };
+    return {
+      ...entry,
+      meta: {
+        ...entry.meta,
+        ...syncCompatMirrors(nextDoc)
+      }
+    };
+  });
 }
 
 function toImportFile(name: string, relativePath: string, content: string, encoding?: 'utf8' | 'base64'): PrefabImportFile {
@@ -254,7 +381,7 @@ export async function readBrowserFileBundle(fileList: FileList | File[]): Promis
   const files: PrefabImportFile[] = [];
   for (const file of all) {
     const lower = file.name.toLowerCase();
-    if (!/\.(prefab|mtl|png|jpg|jpeg|webp|meta)$/i.test(lower)) continue;
+    if (!/\.(prefab|mtl|png|jpg|jpeg|webp|meta|effect)$/i.test(lower)) continue;
 
     let relativePath = file.name;
     if (file.webkitRelativePath) {
