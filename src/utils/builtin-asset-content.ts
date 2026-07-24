@@ -1,35 +1,17 @@
 import type { AssetEntry } from '@/types/asset';
 import { blendModeLabel, getBlendModeFromMaterialAsset } from '@/utils/material-blend';
+import { formatMaterialSourcePreview } from '@/utils/mtl-io';
+import { getParticleMaterialConfig, techniqueLabel } from '@/utils/particle-material';
 
 export function generateBuiltinMaterialSource(asset: AssetEntry): string {
-  const blend = getBlendModeFromMaterialAsset(asset) ?? 'additive';
-  const technique = blend === 'additive' ? 'additive' : 'transparent';
-  return `# FX Studio / Cocos Creator 3.8 粒子材质
+  const config = getParticleMaterialConfig(asset);
+  const blend = getBlendModeFromMaterialAsset(asset) ?? config.blend;
+  const header = `# FX Studio / Cocos Creator 3.8 粒子材质
 # 名称: ${asset.name}
+# Technique: ${techniqueLabel(config.techIdx)}
 # 混合: ${blendModeLabel(blend)}
-
-{
-  "__type__": "cc.Material",
-  "_name": "${asset.name}",
-  "_techIdx": 0,
-  "_defines": [],
-  "_states": [
-    {
-      "rasterizerState": {},
-      "depthStencilState": {},
-      "blendState": {
-        "targets": [{ "blend": true, "blendSrc": ${blend === 'additive' ? '770' : '1'}, "blendDst": ${blend === 'additive' ? '1' : '771'} }]
-      }
-    }
-  ],
-  "_props": []
-}
-
-# 预览说明:
-# - additive: 颜色叠加变亮，适合火焰/光效
-# - alpha: 标准透明，适合烟雾/灰尘
-# 导出时会写入 .mtl 并引用对应 Effect
 `;
+  return `${header}\n${formatMaterialSourcePreview(asset)}\n`;
 }
 
 export function generateBuiltinShaderSource(asset: AssetEntry): string {

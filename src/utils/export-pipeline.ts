@@ -17,6 +17,7 @@ import {
   buildExportAssetSummary,
   type ExportAssetSummary
 } from './asset-texture-export';
+import { getParticleMaterialConfig } from './particle-material';
 import { getEmitterNodes } from './preview-sources';
 
 export interface ProjectExportAssetFile {
@@ -49,7 +50,16 @@ function collectProjectExportBindings(
   ctx?: ProjectExportContext
 ): {
   textureByAssetId: Map<string, ReturnType<typeof buildTextureExportFromAsset>>;
-  materialByKey: Map<string, { uuid: string; techIdx: number; spriteFrameUuid: string; fileBase: string }>;
+  materialByKey: Map<string, {
+    uuid: string;
+    techIdx: number;
+    spriteFrameUuid: string;
+    fileBase: string;
+    tintColor: { r: number; g: number; b: number; a: number };
+    effectUuid: string;
+    blend: 'additive' | 'alpha';
+    name: string;
+  }>;
   emitterBindings: Map<string, { materialUuid: string; spriteFrameUuid: string }>;
   emitterSummaries: ExportAssetSummary[];
 } {
@@ -57,7 +67,16 @@ function collectProjectExportBindings(
   const projectAssets = ctx?.projectAssets ?? project.assetRegistry;
   const emitters = getEmitterNodes(project.root);
   const textureByAssetId = new Map<string, ReturnType<typeof buildTextureExportFromAsset>>();
-  const materialByKey = new Map<string, { uuid: string; techIdx: number; spriteFrameUuid: string; fileBase: string }>();
+  const materialByKey = new Map<string, {
+    uuid: string;
+    techIdx: number;
+    spriteFrameUuid: string;
+    fileBase: string;
+    tintColor: { r: number; g: number; b: number; a: number };
+    effectUuid: string;
+    blend: 'additive' | 'alpha';
+    name: string;
+  }>();
   const emitterBindings = new Map<string, { materialUuid: string; spriteFrameUuid: string }>();
   const emitterSummaries: ExportAssetSummary[] = [];
 
@@ -67,20 +86,40 @@ function collectProjectExportBindings(
       textureByAssetId.set(texAsset.id, buildTextureExportFromAsset(texAsset));
     }
     const tex = textureByAssetId.get(texAsset.id)!;
-    const matKey = `${emitter.assetRefs.material ?? 'default'}|${texAsset.id}`;
+    const matAsset = emitter.assetRefs.material ? getAsset(emitter.assetRefs.material) : null;
+    const matConfig = getParticleMaterialConfig(matAsset);
+    // Material may override mainTexture via its own prop; otherwise use emitter texture.
+    let spriteFrameUuid = tex.spriteFrameUuid;
+    if (matConfig.mainTextureAssetId) {
+      const matTex = resolveTextureAssetForExport(
+        { mainTexture: matConfig.mainTextureAssetId },
+        projectAssets
+      );
+      if (!textureByAssetId.has(matTex.id)) {
+        textureByAssetId.set(matTex.id, buildTextureExportFromAsset(matTex));
+      }
+      spriteFrameUuid = textureByAssetId.get(matTex.id)!.spriteFrameUuid;
+    } else if (matConfig.mainTextureUuid) {
+      spriteFrameUuid = matConfig.mainTextureUuid;
+    }
+
+    const matKey = `${emitter.assetRefs.material ?? 'default'}|${spriteFrameUuid}|${matConfig.techIdx}|${matConfig.tintColor.r},${matConfig.tintColor.g},${matConfig.tintColor.b},${matConfig.tintColor.a}`;
     if (!materialByKey.has(matKey)) {
-      const matAsset = emitter.assetRefs.material ? getAsset(emitter.assetRefs.material) : null;
       materialByKey.set(matKey, {
         uuid: generateUUID(),
         techIdx: resolveMaterialTechIdx(emitter.assetRefs.material, getAsset),
-        spriteFrameUuid: tex.spriteFrameUuid,
-        fileBase: sanitizeExportBaseName(matAsset?.name ?? `${emitter.name}-particle`)
+        spriteFrameUuid,
+        fileBase: sanitizeExportBaseName(matAsset?.name ?? `${emitter.name}-particle`),
+        tintColor: matConfig.tintColor,
+        effectUuid: matConfig.effectUuid,
+        blend: matConfig.blend,
+        name: matAsset?.name ?? `${emitter.name}-particle`
       });
     }
     const mat = materialByKey.get(matKey)!;
     emitterBindings.set(emitter.id, {
       materialUuid: mat.uuid,
-      spriteFrameUuid: tex.spriteFrameUuid
+      spriteFrameUuid: mat.spriteFrameUuid
     });
     emitterSummaries.push(buildExportAssetSummary(emitter.assetRefs, projectAssets, getAsset));
   }
@@ -129,7 +168,16 @@ export function generateProjectPrefab(
     assetFiles.push({
       fileName: `${fileBase}.mtl`,
       content: JSON.stringify(
-        buildParticleMaterial(mat.spriteFrameUuid, mat.techIdx), null, 2
+        buildParticleMaterial({
+          spriteFrameUuid: mat.spriteFrameUuid,
+          techIdx: mat.techIdx,
+          name: mat.name,
+          tintColor: mat.tintColor,
+          effectUuid: mat.effectUuid,
+          blend: mat.blend
+        }),
+        null,
+        2
       ),
       metaFileName: `${fileBase}.mtl.meta`,
       metaContent: JSON.stringify(buildMaterialMeta(mat.uuid), null, 2)
@@ -294,13 +342,24 @@ export function generatePrefab(effectConfig: EffectConfig, ctx?: PrefabExportCon
     : buildDefaultTextureExport('particle-circle');
 
   const techIdx = resolveMaterialTechIdx(ctx?.assetRefs?.material, getAsset);
+  const matAsset = ctx?.assetRefs?.material ? getAsset(ctx.assetRefs.material) : null;
+  const matConfig = getParticleMaterialConfig(matAsset);
 
   const prefabContent = new CocosPrefabBuilder().build(
     config, name, materialUuid, texture.spriteFrameUuid
   );
   const metaContent = JSON.stringify(buildPrefabMeta(prefabUuid, name), null, 2);
   const materialContent = JSON.stringify(
-    buildParticleMaterial(texture.spriteFrameUuid, techIdx), null, 2
+    buildParticleMaterial({
+      spriteFrameUuid: matConfig.mainTextureUuid ?? texture.spriteFrameUuid,
+      techIdx,
+      name: matAsset?.name ?? `${name}-particle`,
+      tintColor: matConfig.tintColor,
+      effectUuid: matConfig.effectUuid,
+      blend: matConfig.blend
+    }),
+    null,
+    2
   );
   const materialMetaContent = JSON.stringify(buildMaterialMeta(materialUuid), null, 2);
 

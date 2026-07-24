@@ -12,7 +12,7 @@ import {
   loadParticleTexture,
   disposeSpriteMaterial
 } from '@/utils/texture-loader';
-import { resolveParticleBlending } from '@/utils/material-blend';
+import { resolveParticleBlending, resolveMaterialTintRgba, resolvePreviewTextureAssetId, applyTintToRgba } from '@/utils/material-blend';
 import {
   cloneTextureForSheet,
   sampleTextureSheetContext,
@@ -32,6 +32,7 @@ interface TaggedParticle {
   position: THREE.Vector3;
   velocity: THREE.Vector3;
   startColorSample: [number, number, number, number];
+  materialTint: [number, number, number, number];
   startSize: number;
   life: number;
   maxLife: number;
@@ -249,11 +250,14 @@ export class CompositeParticlePreview extends ParticlePreview {
       this.applyForces(p as unknown as Parameters<ParticlePreview['applyForces']>[0], cfg, dtCapped);
 
       p.sprite.position.copy(p.position);
-      const rgba = composeParticleColor(
-        p.startColorSample,
-        cfg.colorOverLifetime.color,
-        p.life,
-        cfg.colorOverLifetime.enabled
+      const rgba = applyTintToRgba(
+        composeParticleColor(
+          p.startColorSample,
+          cfg.colorOverLifetime.color,
+          p.life,
+          cfg.colorOverLifetime.enabled
+        ),
+        p.materialTint
       );
       p.material.color.setRGB(rgba[0], rgba[1], rgba[2]);
       p.material.opacity = rgba[3];
@@ -291,7 +295,11 @@ export class CompositeParticlePreview extends ParticlePreview {
     if (!this.assetContext) return;
     const { getAsset, projectDir } = this.assetContext;
     for (const source of sources) {
-      const assetId = source.mainTextureAssetId;
+      const assetId = resolvePreviewTextureAssetId(
+        source.mainTextureAssetId,
+        source.materialAssetId,
+        getAsset
+      );
       if (!assetId) continue;
       const entry = getAsset(assetId);
       if (!entry) continue;
@@ -300,7 +308,13 @@ export class CompositeParticlePreview extends ParticlePreview {
   }
 
   private getParticleTexture(source: EmitterPreviewSource): THREE.Texture {
-    const assetId = source.mainTextureAssetId;
+    const assetId = this.assetContext
+      ? resolvePreviewTextureAssetId(
+        source.mainTextureAssetId,
+        source.materialAssetId,
+        this.assetContext.getAsset
+      )
+      : source.mainTextureAssetId;
     if (assetId) {
       const cached = getCachedParticleTexture(assetId);
       if (cached) return cached;
@@ -325,12 +339,16 @@ export class CompositeParticlePreview extends ParticlePreview {
     const startSize = sampleStartParticleSize(cfg);
     const size = computeParticleScale(cfg, startSize, 0, transform);
     const startSample = sampleStartColor(cfg.mainModule.startColor);
-    const initialRgba = composeParticleColor(
+    let initialRgba = composeParticleColor(
       startSample,
       cfg.colorOverLifetime.color,
       0,
       cfg.colorOverLifetime.enabled
     );
+    const tint = this.assetContext
+      ? resolveMaterialTintRgba(source.materialAssetId, this.assetContext.getAsset)
+      : ([1, 1, 1, 1] as [number, number, number, number]);
+    initialRgba = applyTintToRgba(initialRgba, tint);
 
     const texture = this.getParticleTexture(source);
     let ownedTexture: THREE.Texture | null = null;
@@ -375,6 +393,7 @@ export class CompositeParticlePreview extends ParticlePreview {
       position: pos.clone(),
       velocity: vel,
       startColorSample: startSample,
+      materialTint: tint,
       startSize,
       life: 0,
       maxLife: lifetime,

@@ -39,7 +39,7 @@ export const MaterialAssetView: React.FC<MaterialAssetViewProps> = ({ asset }) =
       )}
 
       <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 6 }}>
-        材质属性为只读（内置）。拖到 Inspector 材质槽或在预览中查看混合效果；导出时写入 .mtl。
+        材质属性可在右侧「全局属性」面板编辑（需先复制到项目）。拖到发射器材质槽后，Technique / tintColor 会参与预览与导出。
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>

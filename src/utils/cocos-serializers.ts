@@ -91,20 +91,48 @@ function buildRealCurve(curve: CurveConfig): Record<string, unknown> {
   };
 }
 
+export interface BuildParticleMaterialOptions {
+  spriteFrameUuid?: string;
+  techIdx?: number;
+  name?: string;
+  tintColor?: { r: number; g: number; b: number; a: number };
+  effectUuid?: string;
+  blend?: 'additive' | 'alpha';
+}
+
 /** Build a single cc.Material JSON object (NOT an array). */
-export function buildParticleMaterial(spriteFrameUuid?: string, techIdx = 1): Record<string, unknown> {
+export function buildParticleMaterial(
+  spriteFrameUuidOrOptions?: string | BuildParticleMaterialOptions,
+  techIdxArg = 1
+): Record<string, unknown> {
+  const opts: BuildParticleMaterialOptions =
+    typeof spriteFrameUuidOrOptions === 'object' && spriteFrameUuidOrOptions !== null
+      ? spriteFrameUuidOrOptions
+      : {
+          spriteFrameUuid: spriteFrameUuidOrOptions,
+          techIdx: techIdxArg
+        };
+  const techIdx = opts.techIdx === 0 ? 0 : 1;
+  const tint = opts.tintColor ?? { r: 255, g: 255, b: 255, a: 255 };
   const props: Record<string, unknown> = {
-    tintColor: { __type__: 'cc.Color', r: 255, g: 255, b: 255, a: 255 }
+    tintColor: {
+      __type__: 'cc.Color',
+      r: tint.r,
+      g: tint.g,
+      b: tint.b,
+      a: tint.a
+    }
   };
-  if (spriteFrameUuid) {
-    props.mainTexture = { __uuid__: spriteFrameUuid };
+  if (opts.spriteFrameUuid) {
+    props.mainTexture = { __uuid__: opts.spriteFrameUuid };
   }
+  const blend = opts.blend ?? (techIdx === 0 ? 'alpha' : 'additive');
   return {
     __type__: 'cc.Material',
-    _name: '',
+    _name: opts.name ?? '',
     _objFlags: 0,
     _native: '',
-    _effectAsset: { __uuid__: BUILTIN_PARTICLE_EFFECT_UUID },
+    _effectAsset: { __uuid__: opts.effectUuid ?? BUILTIN_PARTICLE_EFFECT_UUID },
     _techIdx: techIdx,
     _defines: [{}],
     _states: [{
@@ -112,7 +140,8 @@ export function buildParticleMaterial(spriteFrameUuid?: string, techIdx = 1): Re
       depthStencilState: {},
       blendState: { targets: [{}] }
     }],
-    _props: [props]
+    _props: [props],
+    _fxStudioMeta: { blend }
   };
 }
 

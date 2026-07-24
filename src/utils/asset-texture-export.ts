@@ -45,7 +45,9 @@ export function resolveMaterialTechIdx(
 ): number {
   if (!materialAssetId) return 1;
   const mat = getAsset(materialAssetId);
-  if (mat?.type === 'material' && mat.meta?.blend === 'alpha') return 0;
+  if (!mat || mat.type !== 'material') return 1;
+  if (typeof mat.meta?.techIdx === 'number') return mat.meta.techIdx === 0 ? 0 : 1;
+  if (mat.meta?.blend === 'alpha') return 0;
   return 1;
 }
 

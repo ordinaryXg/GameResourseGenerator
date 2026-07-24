@@ -1,6 +1,7 @@
 import type { AssetEntry } from '@/types/asset';
 import type { EffectProject } from '@/types/project';
 import { buildDefaultTextureExport } from '@/utils/default-particle-texture';
+import { parseMtlContent } from '@/utils/mtl-io';
 
 export interface PrefabImportFile {
   /** Basename, e.g. `smoke.png` */
@@ -190,11 +191,20 @@ function bindEntry(
     ? textureUriForFile(file)
     : normalizeRelPath(file.relativePath);
 
+  let nextMeta = entry.meta;
+  if (entry.type === 'material' && file.encoding !== 'base64') {
+    const parsed = parseMtlContent(file.content);
+    if (parsed) {
+      nextMeta = { ...entry.meta, ...parsed, uuid: entry.meta?.uuid ?? parsed.uuid };
+    }
+  }
+
   return {
     entry: {
       ...entry,
       name: baseName.replace(/\.(png|mtl|jpg|jpeg|webp)$/i, ''),
-      uri
+      uri,
+      meta: nextMeta
     },
     bound: true
   };

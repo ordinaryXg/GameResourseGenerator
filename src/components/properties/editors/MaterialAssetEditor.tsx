@@ -1,10 +1,17 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { AssetEntry } from '@/types/asset';
 import { useProjectStore } from '@/stores/project-store';
 import { useAppStore } from '@/stores/app-store';
-import { blendModeLabel, getBlendModeFromMaterialAsset, type ParticleBlendMode } from '@/utils/material-blend';
-import { generateBuiltinMaterialSource } from '@/utils/builtin-asset-content';
+import { blendModeLabel } from '@/utils/material-blend';
+import { formatMaterialSourcePreview } from '@/utils/mtl-io';
 import { isProjectEditableAsset } from '@/utils/asset-editable';
+import {
+  getParticleMaterialConfig,
+  particleMaterialMetaPatch,
+  techniqueLabel,
+  tintFromCssHex,
+  tintToCssHex
+} from '@/utils/particle-material';
 import {
   AssetEditorHeader,
   AssetEditorSection,
@@ -14,6 +21,8 @@ import {
   monoBlockStyle
 } from '@/components/properties/editors/AssetEditorShared';
 import { AssetMetaFields } from '@/components/properties/editors/AssetMetaFields';
+import { AssetSlot } from '@/components/inspector/AssetSlot';
+import { BUILTIN_PARTICLE_EFFECT_UUID } from '@/types/material';
 
 interface MaterialAssetEditorProps {
   asset: AssetEntry;
@@ -23,18 +32,28 @@ export const MaterialAssetEditor: React.FC<MaterialAssetEditorProps> = ({ asset 
   const updateProjectAsset = useProjectStore(s => s.updateProjectAsset);
   const { showToastMessage } = useAppStore();
   const editable = isProjectEditableAsset(asset);
-  const blend = getBlendModeFromMaterialAsset(asset) ?? 'additive';
+  const config = useMemo(() => getParticleMaterialConfig(asset), [asset]);
 
   const [name, setName] = useState(asset.name);
   const [description, setDescription] = useState(asset.meta?.description ?? '');
+  const [alpha, setAlpha] = useState(config.tintColor.a);
 
-  const sourcePreview = useMemo(() => generateBuiltinMaterialSource(asset), [asset]);
+  useEffect(() => {
+    setName(asset.name);
+    setDescription(asset.meta?.description ?? '');
+    setAlpha(config.tintColor.a);
+  }, [asset.id, asset.name, asset.meta?.description, config.tintColor.a]);
 
-  const setBlend = useCallback((mode: ParticleBlendMode) => {
+  const sourcePreview = useMemo(() => formatMaterialSourcePreview(asset), [asset]);
+
+  const patchMaterial = useCallback((
+    patch: Parameters<typeof particleMaterialMetaPatch>[0],
+    toast?: string
+  ) => {
     if (!editable) return;
-    updateProjectAsset(asset.id, { meta: { ...asset.meta, blend: mode } });
-    showToastMessage(`混合模式：${blendModeLabel(mode)}`);
-  }, [asset, editable, updateProjectAsset, showToastMessage]);
+    updateProjectAsset(asset.id, { meta: particleMaterialMetaPatch(patch) });
+    if (toast) showToastMessage(toast);
+  }, [asset.id, editable, updateProjectAsset, showToastMessage]);
 
   const commitName = useCallback(() => {
     const v = name.trim();
@@ -53,30 +72,96 @@ export const MaterialAssetEditor: React.FC<MaterialAssetEditorProps> = ({ asset 
       <AssetEditorHeader asset={asset} />
       {!editable && <AssetReadonlyBanner />}
 
-      <AssetEditorSection title="混合模式">
-        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-          {(['additive', 'alpha'] as const).map(mode => (
-            <button
-              key={mode}
-              type="button"
-              disabled={!editable}
-              onClick={() => setBlend(mode)}
-              style={{
-                flex: 1,
-                padding: 8,
-                borderRadius: 6,
-                cursor: editable ? 'pointer' : 'not-allowed',
-                border: blend === mode ? '2px solid var(--accent)' : '1px solid var(--border-color)',
-                background: blend === mode ? 'rgba(88,166,255,0.12)' : 'var(--bg-tertiary)',
-                fontSize: 10,
-                color: blend === mode ? 'var(--accent)' : 'var(--text-secondary)'
-              }}
-            >
-              {mode === 'additive' ? '加法 Additive' : '透明 Alpha'}
-            </button>
-          ))}
+      <AssetEditorSection title="Effect">
+        <FieldLabel label="Effect Asset">
+          <input
+            style={{ ...textInputStyle, opacity: 0.75 }}
+            value="builtin-particle (Cocos)"
+            readOnly
+            title={config.effectUuid || BUILTIN_PARTICLE_EFFECT_UUID}
+          />
+        </FieldLabel>
+        <div style={{ fontSize: 10, color: 'var(--text-secondary)', wordBreak: 'break-all' }}>
+          {config.effectUuid || BUILTIN_PARTICLE_EFFECT_UUID}
         </div>
-        <div style={{ fontSize: 11, color: 'var(--accent)' }}>{blendModeLabel(blend)}</div>
+      </AssetEditorSection>
+
+      <AssetEditorSection title="Technique">
+        <FieldLabel label="Technique">
+          <select
+            className="select-sm"
+            style={{ width: '100%' }}
+            disabled={!editable}
+            value={config.techIdx}
+            onChange={(e) => {
+              const techIdx = parseInt(e.target.value, 10) === 0 ? 0 : 1;
+              patchMaterial({ techIdx }, `Technique：${techniqueLabel(techIdx)}`);
+            }}
+          >
+            <option value={0}>0 — transparent (Alpha Blend)</option>
+            <option value={1}>1 — additive</option>
+          </select>
+        </FieldLabel>
+        <div style={{ fontSize: 11, color: 'var(--accent)' }}>
+          {blendModeLabel(config.blend)}
+        </div>
+      </AssetEditorSection>
+
+      <AssetEditorSection title="Props">
+        <FieldLabel label="tintColor">
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input
+              type="color"
+              disabled={!editable}
+              value={tintToCssHex(config.tintColor)}
+              onChange={(e) => {
+                patchMaterial({ tintColor: tintFromCssHex(e.target.value, alpha) });
+              }}
+              style={{ width: 42, height: 28, padding: 0, border: '1px solid var(--border-color)', background: 'transparent' }}
+            />
+            <span style={{ fontSize: 11, color: 'var(--text-secondary)', flex: 1 }}>
+              RGB {config.tintColor.r}, {config.tintColor.g}, {config.tintColor.b}
+            </span>
+          </div>
+        </FieldLabel>
+        <FieldLabel label="tintColor.a (0–255)">
+          <input
+            type="number"
+            min={0}
+            max={255}
+            disabled={!editable}
+            style={textInputStyle}
+            value={alpha}
+            onChange={(e) => setAlpha(Math.max(0, Math.min(255, parseInt(e.target.value, 10) || 0)))}
+            onBlur={() => {
+              if (!editable) return;
+              patchMaterial({
+                tintColor: { ...config.tintColor, a: alpha }
+              });
+            }}
+          />
+        </FieldLabel>
+        <div style={{ marginBottom: 4 }}>
+          <AssetSlot
+            slot="mainTexture"
+            label="mainTexture（可选，覆盖发射器贴图）"
+            assetId={config.mainTextureAssetId}
+            onChange={(id) => {
+              if (!editable) return;
+              patchMaterial({ mainTextureAssetId: id }, id ? '已设置材质贴图' : '已清除材质贴图');
+            }}
+          />
+          {!editable && config.mainTextureAssetId && (
+            <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+              当前：{config.mainTextureAssetId}
+            </div>
+          )}
+          {config.mainTextureUuid && !config.mainTextureAssetId && (
+            <div style={{ fontSize: 10, color: 'var(--text-secondary)', wordBreak: 'break-all' }}>
+              导入 UUID：{config.mainTextureUuid}
+            </div>
+          )}
+        </div>
       </AssetEditorSection>
 
       {editable && (
