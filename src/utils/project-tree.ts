@@ -1,6 +1,9 @@
+import type { AssetEntry } from '@/types/asset';
 import type { EffectNode, EffectGroupNode, EffectProject, ParticleEmitterNode } from '@/types/project';
 import { isGroupNode, isEmitterNode } from '@/types/project';
 import { generateUUID } from './effect-defaults';
+import { isSceneContainer, SCENE_ROOT_NAME } from './project-factory';
+import { identityTransform } from './transform-utils';
 
 export function findNodeById(root: EffectGroupNode, id: string): EffectNode | null {
   if (root.id === id) return root;
@@ -161,5 +164,121 @@ export function touchProjectMetadata(project: EffectProject): EffectProject {
   return {
     ...project,
     metadata: { ...project.metadata, updatedAt: new Date().toISOString() }
+  };
+}
+
+export function reIdEffectNode(node: EffectNode): EffectNode {
+  const walk = (n: EffectNode): EffectNode => {
+    if (isGroupNode(n)) {
+      return {
+        ...n,
+        id: generateUUID(),
+        children: n.children.map(walk)
+      };
+    }
+    return { ...n, id: generateUUID() };
+  };
+  return walk(JSON.parse(JSON.stringify(node)) as EffectNode);
+}
+
+function remapAssetRefsInNode(node: EffectNode, idMap: Map<string, string>): EffectNode {
+  if (isEmitterNode(node)) {
+    const refs = { ...node.assetRefs };
+    if (idMap.has(refs.mainTexture)) refs.mainTexture = idMap.get(refs.mainTexture)!;
+    if (refs.material && idMap.has(refs.material)) refs.material = idMap.get(refs.material)!;
+    return { ...node, assetRefs: refs };
+  }
+  if (isGroupNode(node)) {
+    return { ...node, children: node.children.map((child) => remapAssetRefsInNode(child, idMap)) };
+  }
+  return node;
+}
+
+function mergeAssetRegistries(
+  target: AssetEntry[],
+  imported: AssetEntry[]
+): { registry: AssetEntry[]; idMap: Map<string, string> } {
+  const existingIds = new Set(target.map((asset) => asset.id));
+  const idMap = new Map<string, string>();
+  const registry = [...target];
+
+  for (const asset of imported) {
+    if (asset.source === 'builtin' && existingIds.has(asset.id)) continue;
+    if (existingIds.has(asset.id)) {
+      const newId = generateUUID();
+      idMap.set(asset.id, newId);
+      registry.push({ ...asset, id: newId });
+      existingIds.add(newId);
+      continue;
+    }
+    registry.push(asset);
+    existingIds.add(asset.id);
+  }
+
+  return { registry, idMap };
+}
+
+function uniquifySiblingName(name: string, siblings: EffectNode[]): string {
+  const existing = new Set(siblings.map((node) => node.name));
+  if (!existing.has(name)) return name;
+  let i = 2;
+  while (existing.has(`${name} ${i}`)) i += 1;
+  return `${name} ${i}`;
+}
+
+/** Append imported prefab tree as a new top-level root under the scene container. */
+export function mergeImportedProjectInto(
+  target: EffectProject,
+  imported: EffectProject
+): { project: EffectProject; addedRootId: string } {
+  const { registry, idMap } = mergeAssetRegistries(target.assetRegistry, imported.assetRegistry);
+  let rootNode = reIdEffectNode(imported.root);
+  rootNode = remapAssetRefsInNode(rootNode, idMap);
+  rootNode = { ...rootNode, name: uniquifySiblingName(rootNode.name, target.root.children) };
+
+  const addedRootId = rootNode.id;
+  const root: EffectGroupNode = {
+    ...target.root,
+    children: [...target.root.children, rootNode]
+  };
+
+  return {
+    project: touchProjectMetadata({ ...target, root, assetRegistry: registry }),
+    addedRootId
+  };
+}
+
+/** Wrap a single imported prefab as a new unsaved project with one top-level root. */
+export function wrapImportedAsNewProject(imported: EffectProject): EffectProject {
+  const rootNode = reIdEffectNode(imported.root);
+  return touchProjectMetadata({
+    ...imported,
+    root: {
+      type: 'group',
+      id: generateUUID(),
+      name: SCENE_ROOT_NAME,
+      enabled: true,
+      transform: identityTransform(),
+      children: [rootNode]
+    }
+  });
+}
+
+/** Resolve the node tree used for Cocos prefab export. */
+export function getExportTreeRoot(project: EffectProject): EffectGroupNode {
+  const { root } = project;
+  if (!isSceneContainer(root)) return root;
+
+  if (root.children.length === 1 && isGroupNode(root.children[0]!)) {
+    return root.children[0]!;
+  }
+
+  return {
+    type: 'group',
+    id: root.id,
+    name: project.name,
+    enabled: true,
+    transform: identityTransform(),
+    children: root.children
   };
 }

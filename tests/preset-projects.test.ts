@@ -19,7 +19,7 @@ describe('preset-projects', () => {
   it('builds explosion preset with 3 emitters', () => {
     const project = buildExplosionPresetProject();
     expect(project.name).toBe('爆炸组合');
-    expect(project.root.name).toBe('Explosion');
+    expect(project.root.children[0]?.name).toBe('Explosion');
     const emitters = getEmitterNodes(project.root);
     expect(emitters).toHaveLength(3);
     expect(emitters.map(e => e.name).sort()).toEqual(['Explosion', 'Glow', 'Smoke']);

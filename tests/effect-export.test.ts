@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { AssetEntry } from '../src/types/asset';
-import type { EffectProject } from '../src/types/project';
+import type { EffectProject, EffectGroupNode, ParticleEmitterNode } from '../src/types/project';
 import {
   buildEffectExportFile,
   buildEffectMeta,
@@ -34,6 +34,20 @@ CCProgram fs %{
   vec4 frag() { return vec4(1.0); }
 }%
 `;
+
+function mapEmittersInTree(
+  root: EffectGroupNode,
+  mapper: (emitter: ParticleEmitterNode) => ParticleEmitterNode
+): EffectGroupNode {
+  return {
+    ...root,
+    children: root.children.map((child) => {
+      if (child.type === 'emitter') return mapper(child);
+      if (child.type === 'group') return mapEmittersInTree(child, mapper);
+      return child;
+    })
+  };
+}
 
 function createCustomShaderMaterialProject(): {
   project: EffectProject;
@@ -96,16 +110,10 @@ function createCustomShaderMaterialProject(): {
   const project: EffectProject = {
     ...base,
     assetRegistry: registry,
-    root: {
-      ...base.root,
-      children: base.root.children.map((child) => {
-        if (child.type !== 'emitter') return child;
-        return {
-          ...child,
-          assetRefs: { ...child.assetRefs, material: materialId }
-        };
-      })
-    }
+    root: mapEmittersInTree(base.root, (emitter) => ({
+      ...emitter,
+      assetRefs: { ...emitter.assetRefs, material: materialId }
+    }))
   };
 
   const getAsset = (id: string) => registry.find(a => a.id === id) ?? null;

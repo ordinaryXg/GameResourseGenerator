@@ -82,6 +82,41 @@ ipcMain.handle('dialog:openProjectFile', async () => {
   return result.canceled ? null : result.filePaths[0];
 });
 
+ipcMain.handle('dialog:openProjectFolder', async () => {
+  const result = await dialog.showOpenDialog(mainWindow!, {
+    properties: ['openDirectory'],
+    title: '打开项目文件夹',
+    buttonLabel: '打开'
+  });
+  if (result.canceled || !result.filePaths[0]) {
+    return { ok: false as const, error: 'CANCELLED' as const };
+  }
+  const projectDir = result.filePaths[0];
+  const entries = await readdir(projectDir);
+  const folderName = basename(projectDir);
+  const fxprojs = entries.filter((e) => e.toLowerCase().endsWith('.fxproj'));
+  if (fxprojs.length === 0) {
+    return { ok: false as const, error: 'NO_FXPROJ' as const };
+  }
+  const preferred = fxprojs.find(
+    (f) => f.replace(/\.fxproj$/i, '').toLowerCase() === folderName.toLowerCase()
+  ) ?? fxprojs[0]!;
+  return {
+    ok: true as const,
+    projectDir,
+    projectPath: join(projectDir, preferred)
+  };
+});
+
+ipcMain.handle('dialog:pickProjectFolder', async (_event, options?: { title?: string; buttonLabel?: string }) => {
+  const result = await dialog.showOpenDialog(mainWindow!, {
+    properties: ['openDirectory', 'createDirectory'],
+    title: options?.title ?? '选择项目文件夹',
+    buttonLabel: options?.buttonLabel ?? '选择'
+  });
+  return result.canceled ? null : result.filePaths[0] ?? null;
+});
+
 ipcMain.handle('dialog:saveProjectFile', async (_event, defaultName?: string) => {
   const safe = (defaultName || 'project').replace(/[<>:"/\\|?*]/g, '_');
   const result = await dialog.showSaveDialog(mainWindow!, {

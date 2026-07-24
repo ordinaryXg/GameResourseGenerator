@@ -15,7 +15,7 @@ interface ProjectWelcomeProps {
 
 export const ProjectWelcome: React.FC<ProjectWelcomeProps> = ({ onProjectReady }) => {
   const {
-    newProject, newProjectFromPreset, openProjectFromJson, loadProjectData,
+    createNewProjectInFolder, newProjectFromPreset, openProjectFromJson, openProjectFolder, loadProjectData,
     openRecentProject, pruneRecentProjects,
     recentProjects, restoreAutosave
   } = useProjectStore();
@@ -28,9 +28,21 @@ export const ProjectWelcome: React.FC<ProjectWelcomeProps> = ({ onProjectReady }
     void pruneRecentProjects();
   }, [pruneRecentProjects]);
 
-  const handleNew = () => {
-    newProject();
-    onProjectReady();
+  const handleNew = async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      const result = await createNewProjectInFolder();
+      if (result.ok) {
+        onProjectReady();
+        return;
+      }
+      if (result.reason === 'exists' || result.reason === 'error') {
+        setError(result.message ?? '创建失败');
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handlePreset = (presetId: string) => {
@@ -42,12 +54,15 @@ export const ProjectWelcome: React.FC<ProjectWelcomeProps> = ({ onProjectReady }
     setError(null);
     setLoading(true);
     try {
-      if (window.electronAPI?.openProjectFile && window.electronAPI.readFile) {
-        const path = await window.electronAPI.openProjectFile();
-        if (!path) return;
-        const json = await window.electronAPI.readFile(path);
-        openProjectFromJson(json, path);
-        onProjectReady();
+      if (window.electronAPI?.openProjectFolder) {
+        const result = await openProjectFolder();
+        if (result.ok) {
+          onProjectReady();
+          return;
+        }
+        if (result.reason === 'no-fxproj') {
+          setError(result.message ?? '所选文件夹内没有 .fxproj 文件');
+        }
         return;
       }
       const input = document.createElement('input');
@@ -134,7 +149,7 @@ export const ProjectWelcome: React.FC<ProjectWelcomeProps> = ({ onProjectReady }
         </div>
 
         <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, margin: '20px 0' }}>
-          从预设组合快速开始，或创建/打开 <code>.fxproj</code> 项目文件。
+          新建项目需先选择目标文件夹；也可从预设开始，或打开已有项目文件夹。
         </p>
 
         <div style={{ marginBottom: 16 }}>
@@ -173,7 +188,7 @@ export const ProjectWelcome: React.FC<ProjectWelcomeProps> = ({ onProjectReady }
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <button className="btn-primary" onClick={handleNew} disabled={loading} style={{ padding: '10px 16px' }}>
-            空白项目
+            新建项目…
           </button>
           <button className="btn-sm" onClick={handleOpen} disabled={loading} style={{ padding: '10px 16px' }}>
             打开项目…

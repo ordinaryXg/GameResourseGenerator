@@ -1,7 +1,8 @@
-import type { EffectProject, ParticleEmitterNode } from '@/types/project';
+import type { EffectProject, EffectGroupNode, ParticleEmitterNode } from '@/types/project';
 import {
   createDefaultProject,
-  createDefaultEmitter
+  createDefaultEmitter,
+  createDefaultTransform
 } from '@/utils/project-factory';
 import { generateUUID } from '@/utils/effect-defaults';
 import { PRESET_TEMPLATES } from '@/data/template-data';
@@ -41,47 +42,54 @@ function makeEmitter(
   return emitter;
 }
 
+function makeRootGroup(name: string, children: ParticleEmitterNode[]): EffectGroupNode {
+  return {
+    type: 'group',
+    id: generateUUID(),
+    name,
+    enabled: true,
+    transform: createDefaultTransform(),
+    children
+  };
+}
+
 export function buildExplosionPresetProject(): EffectProject {
   const project = createDefaultProject('爆炸组合');
   project.metadata.description = '爆炸 + 烟雾 + 光晕三发射器战斗特效预设';
-  project.root.name = 'Explosion';
-  project.root.children = [];
 
-  project.root.children.push(
-    makeEmitter(
-      'Explosion',
-      templateConfig('t-explosion'),
-      { mainTexture: 'builtin-particle-star', material: 'builtin-mat-fire-additive' },
-      { scale: [1.2, 1.2, 1.2] }
-    ),
-    makeEmitter(
-      'Smoke',
-      templateConfig('t-smoke'),
-      { mainTexture: 'builtin-particle-smoke', material: 'builtin-mat-smoke-alpha' },
-      { position: [0, 1.5, 0], scale: [2, 2, 2] }
-    ),
-    makeEmitter(
-      'Glow',
-      templateConfig('t-magic'),
-      { mainTexture: 'builtin-particle-glow', material: 'builtin-mat-glow-additive' },
-      { position: [0, 0.5, 0], rotation: [0, 45, 0], scale: [1.5, 1.5, 1.5] }
-    )
+  const glow = makeEmitter(
+    'Glow',
+    templateConfig('t-magic'),
+    { mainTexture: 'builtin-particle-glow', material: 'builtin-mat-glow-additive' },
+    { position: [0, 0.5, 0], rotation: [0, 45, 0], scale: [1.5, 1.5, 1.5] }
   );
+  glow.config.mainModule.duration = 2;
+  glow.config.mainModule.rateOverTime = 40;
+  glow.config.mainModule.capacity = 60;
 
-  const glow = project.root.children[2];
-  if (glow.type === 'emitter') {
-    glow.config.mainModule.duration = 2;
-    glow.config.mainModule.rateOverTime = 40;
-    glow.config.mainModule.capacity = 60;
-  }
+  project.root.children = [
+    makeRootGroup('Explosion', [
+      makeEmitter(
+        'Explosion',
+        templateConfig('t-explosion'),
+        { mainTexture: 'builtin-particle-star', material: 'builtin-mat-fire-additive' },
+        { scale: [1.2, 1.2, 1.2] }
+      ),
+      makeEmitter(
+        'Smoke',
+        templateConfig('t-smoke'),
+        { mainTexture: 'builtin-particle-smoke', material: 'builtin-mat-smoke-alpha' },
+        { position: [0, 1.5, 0], scale: [2, 2, 2] }
+      ),
+      glow
+    ])
+  ];
   return project;
 }
 
 export function buildMagicPresetProject(): EffectProject {
   const project = createDefaultProject('魔法组合');
   project.metadata.description = '星光 + 光环 + 火花三发射器魔法特效预设';
-  project.root.name = 'Magic';
-  project.root.children = [];
 
   const ring = makeEmitter(
     'MagicRing',
@@ -93,35 +101,33 @@ export function buildMagicPresetProject(): EffectProject {
   ring.config.shapeModule.radius = 2;
   ring.config.mainModule.rateOverTime = 8;
 
-  project.root.children.push(
-    makeEmitter(
-      'Sparkle',
-      templateConfig('t-magic'),
-      { mainTexture: 'builtin-particle-star', material: 'builtin-mat-magic-additive' }
-    ),
-    ring,
-    makeEmitter(
-      'Sparks',
-      templateConfig('t-fire'),
-      { mainTexture: 'builtin-particle-spark', material: 'builtin-mat-spark-additive' },
-      { position: [0, -0.2, 0] }
-    )
+  const sparks = makeEmitter(
+    'Sparks',
+    templateConfig('t-fire'),
+    { mainTexture: 'builtin-particle-spark', material: 'builtin-mat-spark-additive' },
+    { position: [0, -0.2, 0] }
   );
+  sparks.config.mainModule.duration = 4;
+  sparks.config.shapeModule.shapeType = 'sphere';
+  sparks.config.shapeModule.radius = 1.5;
 
-  const sparks = project.root.children[2];
-  if (sparks.type === 'emitter') {
-    sparks.config.mainModule.duration = 4;
-    sparks.config.shapeModule.shapeType = 'sphere';
-    sparks.config.shapeModule.radius = 1.5;
-  }
+  project.root.children = [
+    makeRootGroup('Magic', [
+      makeEmitter(
+        'Sparkle',
+        templateConfig('t-magic'),
+        { mainTexture: 'builtin-particle-star', material: 'builtin-mat-magic-additive' }
+      ),
+      ring,
+      sparks
+    ])
+  ];
   return project;
 }
 
 export function buildEnvironmentPresetProject(): EffectProject {
   const project = createDefaultProject('环境组合');
   project.metadata.description = '雪花 + 雨滴 + 氛围尘三发射器环境特效预设';
-  project.root.name = 'Environment';
-  project.root.children = [];
 
   const dust = makeEmitter(
     'AmbientDust',
@@ -132,21 +138,23 @@ export function buildEnvironmentPresetProject(): EffectProject {
   dust.config.mainModule.rateOverTime = 5;
   dust.config.mainModule.startSpeed = { mode: 'randomBetween', min: 0.1, max: 0.5 };
 
-  project.root.children.push(
-    makeEmitter(
-      'Snow',
-      templateConfig('t-snow'),
-      { mainTexture: 'builtin-particle-soft', material: 'builtin-mat-soft-additive' },
-      { position: [0, 3, 0] }
-    ),
-    makeEmitter(
-      'Rain',
-      templateConfig('t-rain'),
-      { mainTexture: 'builtin-particle-cross', material: 'builtin-mat-fade-alpha' },
-      { position: [0, 4, 0] }
-    ),
-    dust
-  );
+  project.root.children = [
+    makeRootGroup('Environment', [
+      makeEmitter(
+        'Snow',
+        templateConfig('t-snow'),
+        { mainTexture: 'builtin-particle-soft', material: 'builtin-mat-soft-additive' },
+        { position: [0, 3, 0] }
+      ),
+      makeEmitter(
+        'Rain',
+        templateConfig('t-rain'),
+        { mainTexture: 'builtin-particle-cross', material: 'builtin-mat-fade-alpha' },
+        { position: [0, 4, 0] }
+      ),
+      dust
+    ])
+  ];
   return project;
 }
 

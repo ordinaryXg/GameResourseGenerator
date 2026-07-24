@@ -20,7 +20,8 @@ import {
   touchProjectMetadata,
   findParentOfNode,
   containsNodeId,
-  getStrictSelectedEmitter
+  getStrictSelectedEmitter,
+  mergeImportedProjectInto
 } from '@/utils/project-tree';
 import {
   serializeProject,
@@ -30,6 +31,7 @@ import {
   prepareProjectForSave,
   getProjectDirFromFilePath
 } from '@/utils/project-io';
+import { resolveProjectLocation } from '@/utils/project-paths';
 import { generateUUID } from '@/utils/effect-defaults';
 import type { AssetEntry } from '@/types/asset';
 import type { EmitterAssetRefs } from '@/types/asset';
@@ -46,6 +48,7 @@ import { syncAssetStoreFromProject, useAssetStore } from '@/stores/asset-store';
 import { useAppStore } from '@/stores/app-store';
 import { patchAssetInRegistry, duplicateAssetEntry } from '@/utils/asset-registry';
 import { generateBuiltinShaderSource } from '@/utils/builtin-asset-content';
+import { getEmitterNodes } from '@/utils/preview-sources';
 
 const RECENT_KEY = 'fx-studio-recent-projects';
 const AUTOSAVE_KEY = 'fx-studio-autosave';
@@ -97,6 +100,17 @@ function getSelectedEmitter(project: EffectProject, selectedNodeId: string | nul
   return getFirstEmitter(project.root);
 }
 
+function getFirstEmitterInSubtree(node: EffectNode): ParticleEmitterNode | null {
+  if (isEmitterNode(node)) return node;
+  if (isGroupNode(node)) {
+    for (const child of node.children) {
+      const found = getFirstEmitterInSubtree(child);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 interface ProjectState {
   project: EffectProject | null;
   projectPath: string | null;
@@ -112,14 +126,26 @@ interface ProjectState {
   messages: ChatMessage[];
 
   newProject: (name?: string) => void;
+  createNewProjectInFolder: () => Promise<
+    | { ok: true }
+    | { ok: false; reason: 'cancelled' | 'exists' | 'error'; message?: string }
+  >;
   newProjectFromPreset: (presetId: string) => void;
   loadProjectData: (project: EffectProject, path?: string | null, options?: { assetRootDir?: string | null }) => void;
   openProjectFromJson: (json: string, path?: string | null) => void;
+  openProjectFolder: () => Promise<
+    | { ok: true }
+    | { ok: false; reason: 'cancelled' | 'no-fxproj' | 'error'; message?: string }
+  >;
   openRecentProject: (path: string) => Promise<{ ok: true } | { ok: false; reason: 'missing' | 'error'; message?: string }>;
   removeRecentProject: (path: string) => void;
   pruneRecentProjects: () => Promise<void>;
   saveProject: (path?: string) => Promise<boolean>;
   saveProjectAs: () => Promise<boolean>;
+  importPrefabRoot: (
+    imported: EffectProject,
+    options?: { assetRootDir?: string | null }
+  ) => { addedRootId: string; emitterCount: number } | null;
   closeProject: () => void;
   markDirty: () => void;
 
@@ -216,6 +242,62 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     syncAssetStoreFromProject(project.assetRegistry);
   },
 
+  createNewProjectInFolder: async () => {
+    const api = window.electronAPI;
+    if (!api?.pickProjectFolder || !api.mkdir || !api.writeFile || !api.exists) {
+      return { ok: false, reason: 'error', message: '需要 Electron 环境才能新建项目' };
+    }
+
+    const picked = await api.pickProjectFolder({
+      title: '新建项目 — 选择或创建项目文件夹',
+      buttonLabel: '创建'
+    });
+    if (!picked) return { ok: false, reason: 'cancelled' };
+
+    const { projectDir, projectPath, projectName } = resolveProjectLocation(picked);
+    if (await api.exists(projectPath)) {
+      return {
+        ok: false,
+        reason: 'exists',
+        message: `该文件夹已存在 ${projectName}.fxproj，请换文件夹或打开已有项目`
+      };
+    }
+
+    const project = createDefaultProject(projectName);
+    const first = getFirstEmitter(project.root);
+    const selectedNodeId = first?.id ?? null;
+    const content = serializeProject(prepareProjectForSave(project));
+
+    try {
+      await api.mkdir(projectDir);
+      await api.writeFile(projectPath, content);
+      pushRecent(projectPath);
+      set({
+        project,
+        projectPath,
+        projectDir,
+        selectedNodeId,
+        soloNodeId: null,
+        isDirty: false,
+        isLoaded: true,
+        messages: [],
+        recentProjects: loadRecentProjects(),
+        ...emptyHistoryStacks(),
+        ...refreshBridge({ project, selectedNodeId })
+      });
+      syncAssetStoreFromProject(project.assetRegistry);
+      if (selectedNodeId) {
+        useAppStore.getState().selectNodeForInspector(selectedNodeId);
+      } else {
+        useAppStore.getState().clearInspectorTarget();
+      }
+      return { ok: true };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '创建失败';
+      return { ok: false, reason: 'error', message };
+    }
+  },
+
   newProjectFromPreset: (presetId) => {
     const project = buildPresetProject(presetId);
     const first = getFirstEmitter(project.root);
@@ -269,6 +351,28 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     get().loadProjectData(project, path);
   },
 
+  openProjectFolder: async () => {
+    const api = window.electronAPI;
+    if (!api?.openProjectFolder || !api.readFile) {
+      return { ok: false, reason: 'error', message: '需要 Electron 环境' };
+    }
+    try {
+      const result = await api.openProjectFolder();
+      if (!result?.ok) {
+        if (result?.error === 'NO_FXPROJ') {
+          return { ok: false, reason: 'no-fxproj', message: '所选文件夹内没有 .fxproj 文件' };
+        }
+        return { ok: false, reason: 'cancelled' };
+      }
+      const json = await api.readFile(result.projectPath);
+      get().openProjectFromJson(json, result.projectPath);
+      return { ok: true };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '打开失败';
+      return { ok: false, reason: 'error', message };
+    }
+  },
+
   openRecentProject: async (path) => {
     const api = window.electronAPI;
     if (!api?.readFile) {
@@ -319,7 +423,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
     if (window.electronAPI?.writeFile && target) {
       const dir = getProjectDirFromFilePath(target);
-      await window.electronAPI.mkdir(`${dir}/assets`);
+      await window.electronAPI.mkdir(dir);
       await window.electronAPI.writeFile(target, content);
       pushRecent(target);
       set({
@@ -346,14 +450,59 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   saveProjectAs: async () => {
-    if (window.electronAPI?.saveProjectFile) {
-      const { project } = get();
-      if (!project) return false;
-      const path = await window.electronAPI.saveProjectFile(project.name);
-      if (!path) return false;
-      return get().saveProject(path);
+    const { project, selectedNodeId } = get();
+    if (!project) return false;
+
+    if (window.electronAPI?.pickProjectFolder && window.electronAPI.mkdir) {
+      const picked = await window.electronAPI.pickProjectFolder({
+        title: '另存为 — 选择项目文件夹',
+        buttonLabel: '保存'
+      });
+      if (!picked) return false;
+      const { projectDir, projectPath, projectName } = resolveProjectLocation(picked);
+      await window.electronAPI.mkdir(projectDir);
+      const nextProject =
+        project.name !== projectName
+          ? touchProjectMetadata({ ...project, name: projectName })
+          : project;
+      if (nextProject !== project) {
+        set({
+          project: nextProject,
+          ...refreshBridge({ project: nextProject, selectedNodeId })
+        });
+      }
+      return get().saveProject(projectPath);
     }
-    return get().saveProject(`${get().project?.name ?? 'project'}.fxproj`);
+
+    return get().saveProject(`${project.name}.fxproj`);
+  },
+
+  importPrefabRoot: (imported, options) => {
+    const { project, selectedNodeId, soloNodeId, undoStack, redoStack } = get();
+    if (!project) return null;
+
+    const history = nextHistoryStacks({ undoStack, redoStack }, project, selectedNodeId, soloNodeId);
+    const { project: merged, addedRootId } = mergeImportedProjectInto(project, imported);
+    const addedNode = findNodeById(merged.root, addedRootId);
+    const selectId = addedNode
+      ? getFirstEmitterInSubtree(addedNode)?.id ?? addedRootId
+      : getFirstEmitter(merged.root)?.id ?? null;
+
+    set({
+      ...history,
+      project: merged,
+      selectedNodeId: selectId,
+      isDirty: true,
+      ...refreshBridge({ project: merged, selectedNodeId: selectId })
+    });
+    syncAssetStoreFromProject(merged.assetRegistry);
+    if (selectId) {
+      useAppStore.getState().selectNodeForInspector(selectId);
+    }
+    return {
+      addedRootId,
+      emitterCount: getEmitterNodes(merged.root).length
+    };
   },
 
   closeProject: () => {

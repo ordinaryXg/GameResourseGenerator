@@ -5,11 +5,17 @@ declare global {
     electronAPI: {
       openDirectory: () => Promise<string | null>;
       openProjectFile: () => Promise<string | null>;
+      openProjectFolder: () => Promise<
+        | { ok: true; projectPath: string; projectDir: string }
+        | { ok: false; error: 'NO_FXPROJ' | 'CANCELLED' }
+      >;
+      pickProjectFolder: (options?: { title?: string; buttonLabel?: string }) => Promise<string | null>;
       importPrefabBundle: () => Promise<{
         prefabPath: string;
         assetRootDir: string;
         files: { name: string; relativePath: string; content: string; encoding?: 'utf8' | 'base64' }[];
       } | null>;
+      /** @deprecated use pickProjectFolder */
       saveProjectFile: (defaultName?: string) => Promise<string | null>;
       readFile: (path: string) => Promise<string>;
       writeFile: (path: string, content: string) => Promise<boolean>;

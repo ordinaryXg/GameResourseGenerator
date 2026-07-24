@@ -20,6 +20,7 @@ import { getParticleMaterialConfig } from './particle-material';
 import { getMaterialDocument, getEffectUuid, withResolvedEffectUuid } from './material-document';
 import { serializeMaterialDocument } from './mtl-io';
 import { getEmitterNodes } from './preview-sources';
+import { getExportTreeRoot } from './project-tree';
 import {
   buildEffectExportFile,
   ensureShaderEffectUuid,
@@ -185,7 +186,7 @@ export function generateProjectPrefab(
   const emitters = getEmitterNodes(project.root);
 
   const prefabContent = new CocosPrefabBuilder().buildFromTree(
-    project.root,
+    getExportTreeRoot(project),
     project.name,
     (emitter) => emitterBindings.get(emitter.id)!
   );

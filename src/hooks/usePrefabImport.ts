@@ -9,6 +9,7 @@ import {
 } from '@/utils/prefab-import-bundle';
 import { generateId } from '@/utils/effect-defaults';
 import { getEmitterNodes } from '@/utils/preview-sources';
+import { wrapImportedAsNewProject } from '@/utils/project-tree';
 import { invalidateAssetUrlCache } from '@/utils/asset-resolver';
 import { invalidateThumbnailCache } from '@/utils/asset-thumbnail';
 
@@ -18,31 +19,54 @@ function isPrefabDrag(e: React.DragEvent): boolean {
 
 export function usePrefabImport() {
   const { showToastMessage } = useAppStore();
-  const { loadProjectData, addMessage } = useProjectStore();
+  const { project, loadProjectData, importPrefabRoot, addMessage } = useProjectStore();
   const [isDragOver, setIsDragOver] = useState(false);
   const dragDepthRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const finishImport = useCallback((
-    project: ReturnType<typeof parsePrefabToProject>['project'],
+    importedProject: ReturnType<typeof parsePrefabToProject>['project'],
     warnings: string[],
-    assetRootDir: string | null
+    assetRootDir: string | null,
+    mode: 'merge' | 'new'
   ) => {
-    loadProjectData(project, null, { assetRootDir });
     invalidateAssetUrlCache();
     invalidateThumbnailCache();
-    const emitterCount = getEmitterNodes(project.root).length;
+
+    let emitterCount: number;
+    let rootName: string;
+
+    if (mode === 'merge') {
+      const result = importPrefabRoot(importedProject, { assetRootDir });
+      if (!result) {
+        showToastMessage('导入失败：没有打开的项目');
+        return;
+      }
+      emitterCount = result.emitterCount;
+      const addedNode = useProjectStore.getState().project?.root.children.find(
+        (node) => node.id === result.addedRootId
+      );
+      rootName = addedNode?.name ?? importedProject.name;
+    } else {
+      const wrapped = wrapImportedAsNewProject(importedProject);
+      loadProjectData(wrapped, null, { assetRootDir });
+      emitterCount = getEmitterNodes(wrapped.root).length;
+      rootName = wrapped.root.children[0]?.name ?? wrapped.name;
+    }
+
     addMessage({
       id: generateId(),
       role: 'system',
-      content: `已导入项目：**${project.name}**（${emitterCount} 个发射器）${warnings.length > 0 ? `\n\n⚠ ${warnings.join('\n')}` : ''}`,
+      content: mode === 'merge'
+        ? `已导入 Prefab 根节点：**${rootName}**（项目共 ${emitterCount} 个发射器）${warnings.length > 0 ? `\n\n⚠ ${warnings.join('\n')}` : ''}`
+        : `已导入项目：**${rootName}**（${emitterCount} 个发射器）${warnings.length > 0 ? `\n\n⚠ ${warnings.join('\n')}` : ''}`,
       timestamp: Date.now()
     });
-    showToastMessage(`导入成功：${project.name}`);
+    showToastMessage(mode === 'merge' ? `已添加根节点：${rootName}` : `导入成功：${rootName}`);
     if (warnings.length > 0) {
       setTimeout(() => showToastMessage(warnings[0]!), 2000);
     }
-  }, [loadProjectData, addMessage, showToastMessage]);
+  }, [importPrefabRoot, loadProjectData, addMessage, showToastMessage]);
 
   const importFromBundle = useCallback((
     prefab: PrefabImportFile,
@@ -56,7 +80,8 @@ export function usePrefabImport() {
       if (bound.boundAssetCount > 0) {
         warnings.push(`已绑定 ${bound.boundAssetCount} 个磁盘资产（贴图/材质）`);
       }
-      finishImport(bound.project, warnings, assetRootDir);
+      const mode = useProjectStore.getState().project ? 'merge' : 'new';
+      finishImport(bound.project, warnings, assetRootDir, mode);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : '未知错误';
       showToastMessage(`导入失败：${msg}`);
@@ -64,6 +89,10 @@ export function usePrefabImport() {
   }, [finishImport, showToastMessage]);
 
   const handleImportClick = useCallback(async () => {
+    if (!project) {
+      showToastMessage('请先新建或打开项目');
+      return;
+    }
     const api = window.electronAPI;
     if (api?.importPrefabBundle) {
       showToastMessage('正在扫描关联资产…');
@@ -86,9 +115,14 @@ export function usePrefabImport() {
       return;
     }
     fileInputRef.current?.click();
-  }, [importFromBundle, showToastMessage]);
+  }, [project, importFromBundle, showToastMessage]);
 
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!project) {
+      showToastMessage('请先新建或打开项目');
+      e.target.value = '';
+      return;
+    }
     const files = e.target.files;
     e.target.value = '';
     if (!files || files.length === 0) return;
@@ -99,7 +133,7 @@ export function usePrefabImport() {
       const msg = err instanceof Error ? err.message : '未知错误';
       showToastMessage(`导入失败：${msg}`);
     }
-  }, [importFromBundle, showToastMessage]);
+  }, [project, importFromBundle, showToastMessage]);
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     if (!isPrefabDrag(e)) return;
@@ -131,6 +165,11 @@ export function usePrefabImport() {
     dragDepthRef.current = 0;
     setIsDragOver(false);
 
+    if (!project) {
+      showToastMessage('请先新建或打开项目');
+      return;
+    }
+
     const dropped = Array.from(e.dataTransfer.files);
     const prefabFiles = dropped.filter(f => f.name.toLowerCase().endsWith('.prefab'));
     if (prefabFiles.length === 0) {
@@ -144,7 +183,7 @@ export function usePrefabImport() {
       const msg = err instanceof Error ? err.message : '未知错误';
       showToastMessage(`导入失败：${msg}`);
     }
-  }, [importFromBundle, showToastMessage]);
+  }, [project, importFromBundle, showToastMessage]);
 
   return {
     isDragOver,
@@ -156,4 +195,4 @@ export function usePrefabImport() {
     handleDragLeave,
     handleDrop
   };
-};
+}

@@ -3,9 +3,13 @@ import { contextBridge, ipcRenderer } from 'electron';
 contextBridge.exposeInMainWorld('electronAPI', {
   // Dialog
   openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),
-  openProjectFile: () => ipcRenderer.invoke('dialog:openProjectFile'),
-  importPrefabBundle: () => ipcRenderer.invoke('dialog:importPrefabBundle'),
-  saveProjectFile: (defaultName?: string) => ipcRenderer.invoke('dialog:saveProjectFile', defaultName),
+      openProjectFile: () => ipcRenderer.invoke('dialog:openProjectFile'),
+      openProjectFolder: () => ipcRenderer.invoke('dialog:openProjectFolder'),
+      pickProjectFolder: (options?: { title?: string; buttonLabel?: string }) =>
+        ipcRenderer.invoke('dialog:pickProjectFolder', options),
+      importPrefabBundle: () => ipcRenderer.invoke('dialog:importPrefabBundle'),
+      /** @deprecated use pickProjectFolder + resolveProjectLocation */
+      saveProjectFile: (defaultName?: string) => ipcRenderer.invoke('dialog:saveProjectFile', defaultName),
   readFile: (path: string) => ipcRenderer.invoke('fs:readFile', path),
 
   // File System

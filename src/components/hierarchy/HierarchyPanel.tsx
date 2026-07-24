@@ -17,7 +17,7 @@ type HierarchyMenu =
 interface TreeRowProps {
   node: EffectNode;
   depth: number;
-  rootId: string;
+  sceneRootId: string;
   selectedId: string | null;
   expanded: Set<string>;
   onToggleExpand: (id: string) => void;
@@ -38,19 +38,18 @@ interface TreeRowProps {
 }
 
 const TreeRow: React.FC<TreeRowProps> = ({
-  node, depth, rootId, selectedId, expanded, onToggleExpand, onSelect, onSelectModule,
+  node, depth, sceneRootId, selectedId, expanded, onToggleExpand, onSelect, onSelectModule,
   selectedModuleKey, showModules, onToggleEnabled,
   onContextMenuNode, onContextMenuModule,
   dropTargetId, onDragStartNode, onDragEndNode, onDragOverGroup, onDragLeaveGroup, onDropOnGroup
 }) => {
   const isGroup = isGroupNode(node);
   const isEmitter = isEmitterNode(node);
-  const isRoot = node.id === rootId;
   const isOpen = expanded.has(node.id);
   const isSelected = selectedId === node.id;
   const canExpand = isGroup || isEmitter;
   const isDropTarget = isGroup && dropTargetId === node.id;
-  const canDrag = !isRoot;
+  const canDrag = node.id !== sceneRootId;
 
   return (
     <>
@@ -99,7 +98,6 @@ const TreeRow: React.FC<TreeRowProps> = ({
       >
         <span className="tree-row-label">
           {isGroup ? '📁' : '✨'} {node.name}
-          {isRoot ? ' (根)' : ''}
         </span>
         <span className="tree-row-actions">
           {canExpand && (
@@ -112,16 +110,14 @@ const TreeRow: React.FC<TreeRowProps> = ({
               {isOpen ? '▾' : '▸'}
             </button>
           )}
-          {!isRoot && (
-            <button
-              type="button"
-              className={`tree-icon-btn${node.enabled ? '' : ' is-off'}`}
-              title={node.enabled ? '隐藏' : '显示'}
-              onClick={(e) => { e.stopPropagation(); onToggleEnabled(node.id, !node.enabled); }}
-            >
-              {node.enabled ? '👁' : '○'}
-            </button>
-          )}
+          <button
+            type="button"
+            className={`tree-icon-btn${node.enabled ? '' : ' is-off'}`}
+            title={node.enabled ? '隐藏' : '显示'}
+            onClick={(e) => { e.stopPropagation(); onToggleEnabled(node.id, !node.enabled); }}
+          >
+            {node.enabled ? '👁' : '○'}
+          </button>
         </span>
       </div>
       {isGroup && isOpen && node.children.map(child => (
@@ -129,7 +125,7 @@ const TreeRow: React.FC<TreeRowProps> = ({
           key={child.id}
           node={child}
           depth={depth + 1}
-          rootId={rootId}
+          sceneRootId={sceneRootId}
           selectedId={selectedId}
           expanded={expanded}
           onToggleExpand={onToggleExpand}
@@ -240,11 +236,11 @@ export const HierarchyPanel: React.FC = () => {
     });
   }, [selectedNodeId, selectNode, setSelectedModuleKey, updateEffectConfig]);
 
-  const filteredRoot = useMemo(() => {
-    if (!project || !search.trim()) return project?.root;
+  const filterTopLevelNodes = useCallback((nodes: EffectNode[]): EffectNode[] => {
+    if (!search.trim()) return nodes;
     const q = search.toLowerCase();
-    const filterNodes = (nodes: EffectNode[]): EffectNode[] =>
-      nodes.flatMap(n => {
+    const filterNodes = (list: EffectNode[]): EffectNode[] =>
+      list.flatMap((n) => {
         if (n.name.toLowerCase().includes(q)) return [n];
         if (isGroupNode(n)) {
           const kids = filterNodes(n.children);
@@ -252,8 +248,15 @@ export const HierarchyPanel: React.FC = () => {
         }
         return [];
       });
-    return { ...project.root, children: filterNodes(project.root.children) };
-  }, [project, search]);
+    return filterNodes(nodes);
+  }, [search]);
+
+  const topLevelNodes = useMemo(
+    () => (project ? filterTopLevelNodes(project.root.children) : []),
+    [project, filterTopLevelNodes]
+  );
+
+  const sceneRootId = project?.root.id ?? '';
 
   const selectedNode = selectedNodeId && project ? findNodeById(project.root, selectedNodeId) : null;
   const renameTarget = renameTargetId && project ? findNodeById(project.root, renameTargetId) : null;
@@ -401,12 +404,32 @@ export const HierarchyPanel: React.FC = () => {
           e.preventDefault();
           setMenu({ kind: 'blank', groupId: project.root.id, x: e.clientX, y: e.clientY });
         }}
+        onDrop={(e) => {
+          e.preventDefault();
+          const dragId = e.dataTransfer.getData('text/fx-node-id');
+          if (dragId && dragId !== sceneRootId) {
+            reparentNode(dragId, sceneRootId);
+            showToastMessage('已移动到根层级');
+          }
+          setDropTargetId(null);
+        }}
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes('text/fx-node-id')) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+        }}
       >
-        {filteredRoot && (
+        {topLevelNodes.length === 0 && (
+          <div style={{ padding: '12px 10px', fontSize: 11, color: 'var(--text-secondary)' }}>
+            暂无根节点。可添加发射器/组，或导入 Prefab。
+          </div>
+        )}
+        {topLevelNodes.map((node) => (
           <TreeRow
-            node={filteredRoot}
+            key={node.id}
+            node={node}
             depth={0}
-            rootId={project.root.id}
+            sceneRootId={sceneRootId}
             selectedId={selectedNodeId}
             expanded={expanded}
             onToggleExpand={toggleExpand}
@@ -424,7 +447,7 @@ export const HierarchyPanel: React.FC = () => {
             onDragLeaveGroup={onDragLeaveGroup}
             onDropOnGroup={onDropOnGroup}
           />
-        )}
+        ))}
       </div>
 
       {selectedNode && (

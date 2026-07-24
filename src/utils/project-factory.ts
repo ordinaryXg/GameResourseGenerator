@@ -28,6 +28,23 @@ export function createDefaultEmitter(name = 'Particle System'): ParticleEmitterN
   };
 }
 
+export const SCENE_ROOT_NAME = '__Scene__';
+
+export function createSceneRoot(children: EffectGroupNode['children'] = []): EffectGroupNode {
+  return {
+    type: 'group',
+    id: generateUUID(),
+    name: SCENE_ROOT_NAME,
+    enabled: true,
+    transform: createDefaultTransform(),
+    children
+  };
+}
+
+export function isSceneContainer(root: EffectGroupNode): boolean {
+  return root.name === SCENE_ROOT_NAME;
+}
+
 export function createDefaultRootGroup(name = 'Root'): EffectGroupNode {
   return {
     type: 'group',
@@ -47,7 +64,7 @@ export function createDefaultProject(name = '新建特效项目'): EffectProject
     name,
     settings: { targetEngine: 'cocos-creator-3.8' },
     assetRegistry: createBuiltinAssetRegistry(),
-    root: createDefaultRootGroup('Root'),
+    root: createSceneRoot([createDefaultEmitter('Particle System')]),
     metadata: { createdAt: now, updatedAt: now }
   };
 }

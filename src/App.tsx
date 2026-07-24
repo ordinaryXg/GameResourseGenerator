@@ -36,7 +36,7 @@ const App: React.FC = () => {
 
   const {
     project, currentEffect, isLoaded, isDirty, projectPath, selectedNodeId,
-    newProject, saveProject, saveProjectAs, closeProject, syncAutosave,
+    createNewProjectInFolder, saveProject, saveProjectAs, closeProject, syncAutosave,
     undo, redo, undoStack, redoStack, updateEmitterAssetRefs
   } = useProjectStore();
 
@@ -75,6 +75,20 @@ const App: React.FC = () => {
     updateEmitterAssetRefs(selectedNodeId, patch);
     showToastMessage(`已应用：${asset.name}`);
   }, [project, selectedNodeId, updateEmitterAssetRefs, showToastMessage]);
+
+  const handleNewProject = useCallback(async () => {
+    const result = await createNewProjectInFolder();
+    if (result.ok) {
+      setShowWelcome(false);
+      showToastMessage('项目已创建');
+      return;
+    }
+    if (result.reason === 'exists') {
+      showToastMessage(result.message ?? '该位置已有项目');
+    } else if (result.reason === 'error') {
+      showToastMessage(result.message ?? '创建失败');
+    }
+  }, [createNewProjectInFolder, showToastMessage]);
 
   const handleSave = useCallback(async () => {
     if (!project) {
@@ -187,7 +201,7 @@ const App: React.FC = () => {
 
         <div className="toolbar-divider" />
 
-        <button className="btn-sm" onClick={() => { newProject(); showToastMessage('已新建项目'); }} title="新建项目">新建</button>
+        <button className="btn-sm" onClick={handleNewProject} title="新建项目">新建</button>
         <button className="btn-sm" onClick={handleOpenProject} title="打开项目">打开</button>
         <button className="btn-sm" onClick={handleSave} disabled={!project} title="保存项目">
           保存{isDirty ? '*' : ''}
@@ -214,7 +228,7 @@ const App: React.FC = () => {
 
         <div className="toolbar-divider" />
 
-        <button className="btn-sm" onClick={handleImportClick} title="导入 .prefab 到当前发射器">导入 Prefab</button>
+        <button className="btn-sm" onClick={handleImportClick} title="导入 Prefab 为新的根节点">导入 Prefab</button>
         <button className="btn-sm" onClick={() => setPresetProjectsOpen(true)} title="打开多发射器组合预设">组合预设</button>
         <button className="btn-sm" onClick={openAssetImport} title="导入 PNG 贴图到项目">导入贴图</button>
         <input
